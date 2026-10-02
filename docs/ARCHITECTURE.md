@@ -8,6 +8,31 @@ A source-grounded AI study companion. Students upload lecture videos, textbooks,
 
 **Out of scope:** Hindi or mixed-language support, audio tutoring.
 
+## Demo course
+
+MIT OCW 6.041 Probabilistic Systems Analysis and Applied Probability (Fall 2010, Prof. John Tsitsiklis), lectures 1–6, plus matching sections of Grinstead & Snell, *Introduction to Probability* (GNU FDL).
+
+| # | Topic | Prerequisites | YouTube ID |
+| --- | --- | --- | --- |
+| 1 | Probability models and axioms | none | j9WZyLZCBzs |
+| 2 | Conditioning and Bayes' rule | 1 | TluTv5V0RmE |
+| 3 | Independence | 2 | 19Ql_Q3l0GA |
+| 4 | Counting | 1 | 6oV3pKLgW2I |
+| 5 | Discrete random variables, PMFs and expectation | 1, 4 | 3MOahpLxj6A |
+| 6 | Discrete random variable examples and joint PMFs | 2, 5 | -qCEoqpwjf4 |
+
+Course files live outside the repo at `~/course-data/6041/` and are never committed:
+
+- `videos/L01–L06.mp4`: OCW's archive.org downloads. Durations match YouTube within 1 s, so every video's timestamp offset is 0.
+- `slides/L01–L06-slides.pdf`: per-lecture slide PDFs.
+- `recitations/R01–R06.pdf` and `R01–R06-sol.pdf`: recitation problems and solutions.
+- `textbook/textbook.pdf`: 165 pages extracted from Grinstead & Snell (528 pages): page 1 (GFDL notice) plus sections 1.2, 3.1–3.2, 4.1, 5.1, 6.1–6.2 (original PDF pages 26–48, 85–129, 145–174, 197–218, 239–282).
+- `syllabus.md`: the six topics with prerequisites.
+- `manifest.csv`: one row per file (file, type, youtube_id, offset_s, title, licence, attribution).
+- `extras/`: one student-made .pptx, added before ingestion, to exercise the PowerPoint → PDF path (no open course ships PowerPoint).
+
+**Licences:** OCW material is CC BY-NC-SA 4.0. Recitations include textbook problems courtesy of Athena Scientific, used with permission. Grinstead & Snell is GNU FDL. Attribution appears in the README and on in-app source cards.
+
 ## Repository layout *(provisional)*
 
 ```
@@ -105,6 +130,6 @@ Written by Shreyas before each feature is built (3–5 observable checks each). 
 
 ### Citations (example)
 
-- Upload `textbook.pdf`, ask "what is a circular queue?": the answer cites a source.
-- Select a paragraph, click **Source**: the PDF opens on the exact page, and that page actually discusses circular queues.
+- Upload `L02-slides.pdf`, ask "what is Bayes' rule?": the answer cites a source.
+- Select a paragraph, click **Source**: the PDF opens on the exact page, and that page actually states Bayes' rule.
 - Ask "what's the capital of France?": the answer is declined or sits entirely in the "Beyond your course" box.
