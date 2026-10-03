@@ -146,3 +146,11 @@ vite.config.ts.timestamp-*
 Briefing for ChatGPT My Hackathon Project.md
 Hackathon Master Plan AI Study Companion.md
 problem_statements.pdf
+
+# Project specific ignores
+plans/
+*firebase-adminsdk*.json
+*service-account*.json
+frontend/.env.local
+backend/.cache/
+
