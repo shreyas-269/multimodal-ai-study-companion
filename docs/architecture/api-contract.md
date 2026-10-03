@@ -21,6 +21,8 @@
 - Slow work returns `202` with a status object; clients poll every 2–3 seconds. No WebSockets, and chat answers are not streamed in v1.
 - Lists accept `?limit=&cursor=` and return `{items, next_cursor}`.
 - CORS allows only the origins in `CORS_ORIGINS`.
+- OpenAPI operation IDs are `{tag}_{function}` (e.g. `health_get`) and must be unique; a test enforces this, because they become the frontend's generated type names.
+- Error codes include `method_not_allowed` (405). 500s pass through a middleware inside CORS, so error responses still carry CORS headers.
 
 ## Access rules
 

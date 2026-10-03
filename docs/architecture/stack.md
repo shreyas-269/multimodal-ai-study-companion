@@ -61,7 +61,8 @@
 │   ├── package.json, Dockerfile
 ├── eval/                 testset/, run_ragas.py, results/, pyproject.toml (calls the API only)
 ├── infra/                firebase.json, firestore.rules, storage.rules,
-│                         firestore.indexes.json, emulator Dockerfile
+│                         firestore.indexes.json, emulator Dockerfile, entrypoint.sh
+├── plans/                Agent plans and reviews (git-ignored, never committed)
 ├── docs/                 ARCHITECTURE.md, DECISIONS.md, HOW_IT_WORKS.md, architecture/
 ├── AGENTS.md, CLAUDE.md, README.md, .env.example, docker-compose.yml
 ```
@@ -79,6 +80,8 @@
 | Frontend | Native: `npm run dev` | 3000 |
 
 Laptop prerequisites: Docker Desktop, Node.js LTS, uv (it installs Python 3.12 for the project), LibreOffice and ffmpeg (for ingestion).
+
+**Local emulators.** `docker compose up emulators` runs the Auth (9099), Firestore (8080), Storage (9199) and UI (4000) emulators in one container, built from `infra/Dockerfile` (Node 22 with a Java 21 runtime copied in, pinned firebase-tools, emulators downloaded at build time). Local runs use the project ID `demo-study-companion`, which the Firebase CLI treats as local-only: no credentials, no access to the real project. Data persists in the named volume `emulator_data`: the CLI exports to `/data/export` on a graceful stop and `infra/entrypoint.sh` imports it on start. Exporting to `/data` itself fails (EBUSY), because it's the volume's mount point. The backend (`uv run --env-file ../.env uvicorn …`) and frontend (`npm run dev`) run natively.
 
 **One-command run (judges):** `docker compose up` starts the emulators, backend and frontend together. Only a Gemini API key is needed.
 
@@ -102,3 +105,5 @@ Names only; `.env.example` is the authoritative list and never holds values.
 | `NEXT_PUBLIC_API_BASE_URL` | frontend | Backend URL |
 | `NEXT_PUBLIC_FIREBASE_API_KEY`, `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`, `NEXT_PUBLIC_FIREBASE_PROJECT_ID`, `NEXT_PUBLIC_FIREBASE_APP_ID` | frontend | Firebase web config (identifies the project; not a secret) |
 | `NEXT_PUBLIC_USE_EMULATORS` | frontend | `true` locally, so sign-in uses the Auth emulator |
+
+Local values: `FIREBASE_PROJECT_ID=demo-study-companion`; emulator hosts use `127.0.0.1`, not `localhost` (Windows can resolve localhost to IPv6 first); `STORAGE_EMULATOR_HOST` includes the scheme (`http://127.0.0.1:9199`), the other two are host:port; `GOOGLE_APPLICATION_CREDENTIALS` is left out of the local `.env` entirely, because a blank value can break Google's auth libraries. Values containing spaces (such as `COURSE_DATA_DIR`) are wrapped in single quotes, because uv's .env parser rejects unquoted spaces and then skips the whole file. `GEMINI_MODEL=gemini-3.8-flash`. Real project values (`study-companion-d049d`) are used only in Cloud Run, Vercel and laptop scripts.

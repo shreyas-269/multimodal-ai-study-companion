@@ -22,3 +22,12 @@ One line per decision: date, decision, reason. Newest at the bottom. Agents prop
 - 2026-10-02: Course files live outside the repo (~/course-data/6041), described by manifest.csv. Reason: size, licence terms (GFDL, third-party problems in OCW files); a fetch script will rebuild them.
 - 2026-10-02: Videos come from OCW's archive.org links, not from YouTube; citations use the YouTube IDs with offset 0. Reason: OCW-sanctioned download; durations verified to match within 1 s.
 - 2026-10-02: The PowerPoint → PDF path is tested with a student-made .pptx. Reason: no open course ships PowerPoint, and a student's own slides are a realistic upload.
+- 2026-10-03: Local runs use the emulators under project ID demo-study-companion; real project values only in Cloud Run, Vercel and laptop scripts. Reason: no credentials locally, judges need only a Gemini key, local runs can't touch real data.
+- 2026-10-03: GEMINI_MODEL is gemini-3.8-flash; the key lives in Google Cloud project 305425035778, which is never linked to billing. Reason: projects on a billing account lose the Gemini free tier.
+- 2026-10-03: Firebase project study-companion-d049d stays on Spark until just before S4; then Blaze, a budget alert, the Storage bucket in a no-cost US region, and deny-all Storage rules. Reason: nothing before S4 needs real Storage, and Cloud Storage requires Blaze.
+- 2026-10-03: Emulator data exports to /data/export, not /data. Reason: /data is the volume's mount point and can't be deleted, so the export failed with EBUSY.
+- 2026-10-03: Antigravity writes its plan to plans/Tn-plan.md; Claude Code writes its review to plans/Tn-review.md; plans/ is git-ignored. Reason: no copying text between agents.
+- 2026-10-03: Backend and frontend are built in parallel Antigravity conversations, one per folder, and committed per folder (git add backend / git add frontend). Reason: speed, without committing the other lane's unfinished files.
+- 2026-10-03: Checkpoint 1 cites physical pages only; page labels, licence-page exclusion and slide splitting move to S4. Reason: the data model already falls back to the physical page.
+- 2026-10-03: The Firestore emulator's vector search is trusted; C2 includes a smoke test, and an in-memory fallback is built only if that test fails. Reason: the Firebase CLI release notes show emulator support.
+- 2026-10-03: docs/HOW_IT_WORKS.md is AI-drafted, and its intro says so; the README's AI disclosure must cover docs. Reason: undisclosed AI use counts as misrepresentation.
