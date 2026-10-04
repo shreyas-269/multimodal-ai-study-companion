@@ -10,6 +10,9 @@ dependencies = [
     "pydantic",
     "pydantic-settings",
     "firebase-admin",
+    "pymupdf~=1.28.0",
+    "fastembed>=0.8.1",
+    "python-multipart>=0.0.32",
 ]
 
 [dependency-groups]

@@ -6,6 +6,7 @@ from firebase_admin import auth
 
 from app.db import get_db, notebook_path, user_path
 from app.db.notebooks import DEMO_NOTEBOOK_ID
+from app.storage import delete_prefix
 
 # Set dummy environment variables ONLY if missing, preserving values provided via ../.env
 os.environ.setdefault("GEMINI_API_KEY", "test-gemini-key")
@@ -27,13 +28,17 @@ def check_emulator_preconditions():
 
     auth_host = os.environ.get("FIREBASE_AUTH_EMULATOR_HOST")
     firestore_host = os.environ.get("FIRESTORE_EMULATOR_HOST")
-    if not auth_host or not firestore_host:
+    storage_host = os.environ.get("STORAGE_EMULATOR_HOST")
+
+    if not auth_host or not firestore_host or not storage_host:
         pytest.fail(
             f"Missing emulator host in environment: "
-            f"FIREBASE_AUTH_EMULATOR_HOST={auth_host}, FIRESTORE_EMULATOR_HOST={firestore_host}"
+            f"FIREBASE_AUTH_EMULATOR_HOST={auth_host}, "
+            f"FIRESTORE_EMULATOR_HOST={firestore_host}, "
+            f"STORAGE_EMULATOR_HOST={storage_host}"
         )
 
-    # Verify both emulators are reachable
+    # Verify all three emulators are reachable
     try:
         res = httpx.get(f"http://{auth_host}/", timeout=2.0)
         assert res.status_code == 200
@@ -45,6 +50,13 @@ def check_emulator_preconditions():
         assert res.status_code == 200
     except Exception as exc:
         pytest.fail(f"Firestore emulator at {firestore_host} is not running or unreachable: {exc}")
+
+    try:
+        storage_url = storage_host if storage_host.startswith("http") else f"http://{storage_host}"
+        res = httpx.get(f"{storage_url}/", timeout=2.0)
+        assert res.status_code in (200, 501)
+    except Exception as exc:
+        pytest.fail(f"Storage emulator at {storage_host} is not running or unreachable: {exc}")
 
 
 @pytest.fixture
@@ -69,14 +81,19 @@ def user_tracker():
 
 @pytest.fixture
 def notebook_tracker():
-    """Track created notebook IDs and clean up only those specific notebooks after the test."""
+    """Track created notebook IDs and clean up only those specific notebooks and subcollections."""
     created_ids = []
     yield created_ids
 
     db = get_db()
     for nb in created_ids:
         try:
-            db.document(notebook_path(nb)).delete()
+            nb_ref = db.document(notebook_path(nb))
+            db.recursive_delete(nb_ref)
+        except Exception:
+            pass
+        try:
+            delete_prefix(f"notebooks/{nb}/")
         except Exception:
             pass
 
@@ -96,7 +113,8 @@ def demo_notebook_context():
         if had_existing and saved_data is not None:
             demo_ref.set(saved_data)
         else:
-            demo_ref.delete()
+            db.recursive_delete(demo_ref)
+            delete_prefix(f"notebooks/{DEMO_NOTEBOOK_ID}/")
     except Exception:
         pass
 

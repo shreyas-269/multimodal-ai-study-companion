@@ -162,9 +162,17 @@ def test_me_operation_ids():
     assert schema["paths"]["/v1/health"]["get"]["operationId"] == "health_get"
     assert schema["paths"]["/v1/me"]["get"]["operationId"] == "me_get"
     assert schema["paths"]["/v1/me"]["patch"]["operationId"] == "me_patch"
-    assert schema["paths"]["/v1/notebooks"]["post"]["operationId"] == "notebooks_create"
-    assert schema["paths"]["/v1/notebooks"]["get"]["operationId"] == "notebooks_list"
-    assert schema["paths"]["/v1/notebooks/{nb}"]["get"]["operationId"] == "notebooks_get"
+    paths = schema["paths"]
+    assert paths["/v1/notebooks"]["post"]["operationId"] == "notebooks_create"
+    assert paths["/v1/notebooks"]["get"]["operationId"] == "notebooks_list"
+    assert paths["/v1/notebooks/{nb}"]["get"]["operationId"] == "notebooks_get"
+    assert paths["/v1/notebooks/{nb}/sources"]["post"]["operationId"] == "sources_create"
+    assert paths["/v1/notebooks/{nb}/sources"]["get"]["operationId"] == "sources_list"
+    assert paths["/v1/notebooks/{nb}/sources/{src}"]["get"]["operationId"] == "sources_get"
+    assert (
+        paths["/v1/notebooks/{nb}/sources/{src}/file"]["get"]["operationId"]
+        == "sources_get_file"
+    )
 
     # Verify uniqueness of all operation IDs in openapi.json
     operation_ids = []

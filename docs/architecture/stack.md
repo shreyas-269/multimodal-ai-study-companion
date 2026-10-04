@@ -7,7 +7,7 @@
 | Area | Choice | Notes |
 | --- | --- | --- |
 | Backend runtime | Python 3.12, uv (pyproject + lockfile) | |
-| Web framework | FastAPI, Uvicorn, Pydantic v2, pydantic-settings | Settings come from environment variables / `.env` |
+| Web framework | FastAPI, Uvicorn, Pydantic v2, pydantic-settings, python-multipart | Settings come from environment variables / `.env` |
 | Firebase | firebase-admin | Token checks, Firestore (including vector search), Storage |
 | Gemini | google-genai | Model name from `GEMINI_MODEL`; all calls go through `backend/app/llm/` |
 | Retries | tenacity | Inside the Gemini wrapper, which also handles caching and 429s |

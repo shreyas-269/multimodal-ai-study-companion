@@ -4,6 +4,8 @@ from typing import Any
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+MAX_UPLOAD_SIZE_BYTES = 30 * 1024 * 1024  # 30 MB
+
 
 class Settings(BaseSettings):
     """Application settings loaded from environment or .env file."""
