@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.api import health, me
+from app.api import health, me, notebooks
 from app.config import get_settings
 
 
@@ -100,4 +100,5 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 v1_router = APIRouter(prefix="/v1")
 v1_router.include_router(health.router)
 v1_router.include_router(me.router)
+v1_router.include_router(notebooks.router)
 app.include_router(v1_router)

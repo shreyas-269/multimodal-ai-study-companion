@@ -1,85 +1,12 @@
-import os
 from datetime import UTC, datetime
 from uuid import uuid4
 
-import httpx
-import pytest
 from fastapi.testclient import TestClient
-from firebase_admin import auth
 
-from app.db import get_db, user_path
 from app.main import app
+from tests.conftest import create_emulator_user
 
 client = TestClient(app)
-
-
-@pytest.fixture(scope="session", autouse=True)
-def check_emulator_preconditions():
-    """Verify safety guards and emulator connectivity before running tests."""
-    project_id = os.environ.get("FIREBASE_PROJECT_ID", "")
-    if not project_id.startswith("demo-"):
-        pytest.fail(
-            f"Safety violation: FIREBASE_PROJECT_ID='{project_id}' does not start with 'demo-'"
-        )
-
-    auth_host = os.environ.get("FIREBASE_AUTH_EMULATOR_HOST")
-    firestore_host = os.environ.get("FIRESTORE_EMULATOR_HOST")
-    if not auth_host or not firestore_host:
-        pytest.fail(
-            f"Missing emulator host in environment: "
-            f"FIREBASE_AUTH_EMULATOR_HOST={auth_host}, FIRESTORE_EMULATOR_HOST={firestore_host}"
-        )
-
-    # Verify both emulators are reachable
-    try:
-        res = httpx.get(f"http://{auth_host}/", timeout=2.0)
-        assert res.status_code == 200
-    except Exception as exc:
-        pytest.fail(f"Auth emulator at {auth_host} is not running or unreachable: {exc}")
-
-    try:
-        res = httpx.get(f"http://{firestore_host}/", timeout=2.0)
-        assert res.status_code == 200
-    except Exception as exc:
-        pytest.fail(f"Firestore emulator at {firestore_host} is not running or unreachable: {exc}")
-
-
-@pytest.fixture
-def user_tracker():
-    """Track created user UIDs and clean up only those specific users after the test."""
-    created_uids = []
-    yield created_uids
-
-    db = get_db()
-    for uid in created_uids:
-        # Delete only test-created Firestore document
-        try:
-            db.document(user_path(uid)).delete()
-        except Exception:
-            pass
-        # Delete test-created Auth user
-        try:
-            auth.delete_user(uid)
-        except Exception:
-            pass
-
-
-def create_emulator_user(
-    email: str | None = None,
-    password: str = "password123",
-) -> tuple[str, str]:
-    """Create a user directly in the Auth emulator and return (uid, id_token)."""
-    auth_host = os.environ["FIREBASE_AUTH_EMULATOR_HOST"]
-    url = f"http://{auth_host}/identitytoolkit.googleapis.com/v1/accounts:signUp?key=fake-key"
-    payload = {"returnSecureToken": True}
-    if email:
-        payload["email"] = email
-        payload["password"] = password
-
-    res = httpx.post(url, json=payload, timeout=5.0)
-    assert res.status_code == 200, f"Failed to create emulator user: {res.text}"
-    data = res.json()
-    return data["localId"], data["idToken"]
 
 
 def test_me_no_token():
@@ -235,6 +162,9 @@ def test_me_operation_ids():
     assert schema["paths"]["/v1/health"]["get"]["operationId"] == "health_get"
     assert schema["paths"]["/v1/me"]["get"]["operationId"] == "me_get"
     assert schema["paths"]["/v1/me"]["patch"]["operationId"] == "me_patch"
+    assert schema["paths"]["/v1/notebooks"]["post"]["operationId"] == "notebooks_create"
+    assert schema["paths"]["/v1/notebooks"]["get"]["operationId"] == "notebooks_list"
+    assert schema["paths"]["/v1/notebooks/{nb}"]["get"]["operationId"] == "notebooks_get"
 
     # Verify uniqueness of all operation IDs in openapi.json
     operation_ids = []

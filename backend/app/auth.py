@@ -1,4 +1,6 @@
-from fastapi import Header, HTTPException
+from typing import Annotated
+
+from fastapi import Depends, Header, HTTPException
 from firebase_admin import auth
 from pydantic import BaseModel
 
@@ -45,3 +47,6 @@ def get_current_user(
     is_guest = decoded_token.get("firebase", {}).get("sign_in_provider") == "anonymous"
 
     return AuthenticatedUser(uid=uid, email=email, is_guest=is_guest)
+
+
+CurrentUser = Annotated[AuthenticatedUser, Depends(get_current_user)]

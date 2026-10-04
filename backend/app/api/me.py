@@ -1,16 +1,12 @@
-from typing import Annotated
-
 import google.api_core.exceptions
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 from firebase_admin import firestore
 
-from app.auth import AuthenticatedUser, get_current_user
+from app.auth import CurrentUser
 from app.db import get_db, user_path
 from app.models.user import User, UserPatch
 
 router = APIRouter(tags=["me"])
-
-CurrentUser = Annotated[AuthenticatedUser, Depends(get_current_user)]
 
 
 @router.get("/me")

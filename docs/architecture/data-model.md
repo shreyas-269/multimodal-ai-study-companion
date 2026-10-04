@@ -135,6 +135,7 @@ Videos are never stored. Laptop-only derived files (transcripts, keyframes befor
 - Vector index on collection group `chunks`, field `embedding`, 384 dimensions, cosine distance.
 - `jobs`: status ascending, next_run_at ascending.
 - `questions`: topic_id, status, difficulty.
+- `notebooks`: owner_uid ascending, created_at descending.
 
 ## Security rules (`infra/firestore.rules`, `infra/storage.rules`)
 
