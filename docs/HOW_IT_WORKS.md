@@ -95,3 +95,28 @@ Template for each feature:
 - *How do you run it without a cloud sign-in?* With `NEXT_PUBLIC_USE_EMULATORS=true` the app signs in against the local Auth emulator, under the `demo-` project ID, so nothing reaches the real project.
 - *What went wrong while building it?* The agent installed an unrelated npm package named `cn`, mistaking shadcn's `cn` helper function for a package, and left `clsx` and `tailwind-merge` (which the helper needs) as indirect dependencies only. The dependency check caught it before the commit. The package was removed and the two real ones added directly.
 - *Known limits:* a successful response with a non-JSON body makes `apiFetch` throw, and a cancelled request is reported as `network_error`. The emulator address is hard-coded to `127.0.0.1:9099`. `/notebooks` has no sign-in guard yet (T5). The font is fetched from Google at build time, so a build needs network access.
+## T5 · Sign-in and the /v1/me page
+
+**What it does:** Students can create an account with email and password, sign in, or continue as a guest; all three land on `/notebooks`. That page asks the backend "who am I?" (`GET /v1/me`) and shows the email (or "Guest"), whether the account is a guest, and the Study Coach setting ("not asked yet", "on" or "off"). A Sign out button returns to `/login`, and `/notebooks` sends signed-out visitors back to `/login`.
+
+**Data flow:** Login form → the browser checks the fields (`reportValidity`) → `AuthProvider` calls Firebase Auth (the emulator locally): `createUserWithEmailAndPassword`, `signInWithEmailAndPassword` or `signInAnonymously` → `onAuthStateChanged` stores the user and sets `loading` to false → an effect on `/login` sees a signed-in user and calls `router.replace("/notebooks")` → `/notebooks` runs a TanStack Query keyed `["me", uid]`, enabled only once a user exists → `getMe()` in `lib/api.ts` waits for `authStateReady()`, gets the ID token and sends `Authorization: Bearer <token>` → the backend verifies the token, creates `users/{uid}` on first sight, and returns email, `is_guest` and `study_coach` → the page renders them.
+- **Guest:** a real Firebase user with no email; the backend returns `is_guest: true`.
+- **Reload:** Firebase restores the session asynchronously. Until it does, `loading` stays true and both pages show "Loading…", so nobody is bounced to `/login` by mistake.
+- **Sign-out:** Firebase sign-out, then `queryClient.clear()`, so the next person never sees cached data from the previous one.
+- **Types:** `getMe()` and `patchMe()` take their types from `lib/api-types.ts` by operation ID (`me_get`, `me_patch`), never written by hand. A missing `study_coach` is treated like null and shows "not asked yet".
+
+**Main files:**
+- `components/auth-provider.tsx`: holds `user` and `loading`, plus sign in, create account, guest and sign out.
+- `lib/auth-errors.ts`: turns Firebase error codes into plain-English messages.
+- `lib/api.ts`: the only `fetch`; attaches the token, turns errors into `ApiError` (including `aborted` for cancelled requests), and has `getMe()` and `patchMe()`.
+- `app/providers.tsx`: the query client, with `AuthProvider` inside it.
+- `app/login/page.tsx`: the form and the redirect effect.
+- `app/notebooks/page.tsx`: the guarded page that shows `/v1/me`.
+
+**A judge might ask… / my answer:**
+- *Why does the frontend never read Firestore itself?* All data goes through the backend with a verified token, and the security rules deny all client access, so there is one place that enforces who sees what.
+- *How do you stop one user seeing another's data?* The backend uses the uid from the verified token, the query cache is keyed by uid, and it is cleared on sign-out.
+- *Why offer a guest option?* Judges can try the app without signing up. A guest is a real Firebase user, so it goes through exactly the same backend path. The trade-off: signing out of a guest account loses it.
+- *What if the token expires?* `getIdToken()` refreshes it automatically before each request.
+- *What went wrong while building it?* The plan review caught two bugs before any code was written. First, the login buttons redirected straight after sign-in, before the app knew about the new user, so `/notebooks` would have seen "no user" and bounced back to `/login`. Now only effects redirect, and only after auth has finished loading. Second, `study_coach` is optional in the generated type, so a missing value would have shown nothing; it now reads as "not asked yet".
+- *How was it tested?* Lint and build pass. A manual walkthrough with React Strict Mode on (account creation, reload, sign-out guard, wrong password, guest, empty fields) showed no console errors, and the Firestore emulator showed one `users/{uid}` document per account.
