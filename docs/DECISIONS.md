@@ -31,3 +31,4 @@ One line per decision: date, decision, reason. Newest at the bottom. Agents prop
 - 2026-10-03: Checkpoint 1 cites physical pages only; page labels, licence-page exclusion and slide splitting move to S4. Reason: the data model already falls back to the physical page.
 - 2026-10-03: The Firestore emulator's vector search is trusted; C2 includes a smoke test, and an in-memory fallback is built only if that test fails. Reason: the Firebase CLI release notes show emulator support.
 - 2026-10-03: docs/HOW_IT_WORKS.md is AI-drafted, and its intro says so; the README's AI disclosure must cover docs. Reason: undisclosed AI use counts as misrepresentation.
+- 2026-10-04: Route handler functions are named by their verb (get, patch, list, create, delete), adding a short noun only when one tag has two routes with the same verb (get_file); operation IDs therefore read {tag}_{verb} or {tag}_{verb}_{noun}. Reason: they become the frontend's generated function and type names.

@@ -111,7 +111,7 @@ def test_openapi_operation_ids_unique():
 
     # Health check operationId
     health_op = schema["paths"]["/v1/health"]["get"]["operationId"]
-    assert health_op == "health_check"
+    assert health_op == "health_get"
 
     # Verify uniqueness of all operationIds
     operation_ids = []
