@@ -1,4 +1,9 @@
 import { getFirebaseAuth } from "./firebase";
+import type { operations } from "./api-types";
+
+export type MeResponse = operations["me_get"]["responses"][200]["content"]["application/json"];
+export type MePatchBody = operations["me_patch"]["requestBody"]["content"]["application/json"];
+export type MePatchResponse = operations["me_patch"]["responses"][200]["content"]["application/json"];
 
 export class ApiError extends Error {
   readonly code: string;
@@ -78,12 +83,15 @@ export async function apiFetch<T>(
   let response: Response;
   try {
     response = await fetch(url, {
-      method: options?.method ?? (options?.body ? "POST" : "GET"),
+      method: options?.method ?? (options?.body !== undefined ? "POST" : "GET"),
       headers,
       body: requestBody,
       signal: options?.signal,
     });
-  } catch {
+  } catch (err: unknown) {
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new ApiError("aborted", "Request was cancelled", 0);
+    }
     throw new ApiError("network_error", "Could not reach the backend", 0);
   }
 
@@ -111,4 +119,15 @@ export async function apiFetch<T>(
   }
 
   throw new ApiError("http_error", `HTTP ${response.status}`, response.status);
+}
+
+export async function getMe(): Promise<MeResponse> {
+  return apiFetch<MeResponse>("/v1/me");
+}
+
+export async function patchMe(body: MePatchBody): Promise<MePatchResponse> {
+  return apiFetch<MePatchResponse>("/v1/me", {
+    method: "PATCH",
+    body,
+  });
 }
