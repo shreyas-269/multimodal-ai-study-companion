@@ -66,3 +66,32 @@ Template for each feature:
 - *Can a user make their own notebook a demo?* No. The create request accepts only `name`; sending `is_demo` is rejected with 422. Only the ingestion script on the laptop writes the demo notebook.
 - *Why check IDs before reading Firestore, and why a full-string match?* Firestore raises an exception on some reserved IDs, which would turn into a 500, so bad IDs get a clean 404 first. A plain `^…$` regex would also accept an ID ending in a newline, because `$` matches just before a final `\n`; a full-string match closes that gap, and a test sends `abc%0A` to prove it.
 - *Do the tests wipe your local data?* No. Each test deletes only what it created and saves and restores the demo notebook if one exists, so the emulator's dev data, and later the ingested demo course, survive a test run.
+## T4 · Frontend skeleton
+
+**What it does:** A Next.js (TypeScript, App Router) app in `frontend/` that is the base for every screen. Opening `/` redirects to `/login`, which is a placeholder card, and `/notebooks` is a placeholder page. Behind them sit three pieces of plumbing: a Firebase sign-in helper (Auth only), the one function that talks to the backend, and TypeScript types generated from the backend's own API description. There is no real sign-in or data yet; that arrives in T5.
+
+**Data flow:** Opening `http://localhost:3000/` → `app/page.tsx` redirects on the server to `/login` → `app/layout.tsx` wraps the page in `Providers` (one TanStack Query client) and loads the font. Firebase is not touched on these pages.
+- `lib/firebase.ts`: `getFirebaseAuth()` runs only in the browser. It reads the six `NEXT_PUBLIC_*` variables, reuses an existing Firebase app if there is one, and, when `NEXT_PUBLIC_USE_EMULATORS` is `true`, connects to the Auth emulator at `http://127.0.0.1:9099` only if `auth.emulatorConfig` is still null. That check makes the connection happen exactly once, even when hot reload re-runs the module.
+- A future call to `apiFetch` in `lib/api.ts`: builds the URL from `NEXT_PUBLIC_API_BASE_URL` → waits for `authStateReady()`, so a reloaded session is restored → adds `Authorization: Bearer <ID token>` if someone is signed in (no header if not) → sends JSON, or `FormData` untouched → on success returns the parsed JSON (`204` returns nothing). On failure it reads the backend's error envelope `{"error": {"code", "message"}}` and throws an `ApiError(code, message, status)`, keeping `retry_after_s` for quota errors. A non-JSON error body (for example an HTML 502 page) becomes `ApiError("http_error", "HTTP <status>", status)`, and an unreachable backend becomes `ApiError("network_error", …, 0)`.
+- `npm run gen:api`: `openapi-typescript` downloads `http://127.0.0.1:8000/openapi.json` and writes `lib/api-types.ts`. Every operation is keyed by its operation ID (`health_get`, `me_get`, `me_patch`), so those IDs become the names used in frontend code. Renaming one in the backend renames it in the frontend.
+- `app/providers.tsx`: one query client for the whole app. It does not retry 4xx errors, retries other failures up to twice, and does not refetch when the window regains focus.
+
+**Main files:**
+- `app/layout.tsx`: font, page title, `Providers`.
+- `app/page.tsx`: redirect to `/login`.
+- `app/login/page.tsx`, `app/notebooks/page.tsx`: placeholders.
+- `app/providers.tsx`: the TanStack Query provider.
+- `lib/firebase.ts`: Firebase Auth only, with the emulator connection.
+- `lib/api.ts`: `apiFetch` and `ApiError`, the only file that calls the backend.
+- `lib/api-types.ts`: generated, never edited by hand, committed to the repo.
+- `components/ui/*`, `lib/utils.ts`: shadcn button, card, input and label, plus the `cn` helper.
+- `frontend/.env.local` (git-ignored): the six variable names, with local values.
+
+**A judge might ask… / my answer:**
+- *Why generate the API types instead of writing them?* The backend's schema is the single source of truth, so the two sides cannot drift apart. If a field changes in the backend, the frontend fails to compile instead of failing at runtime.
+- *Why does only `lib/api.ts` call the backend?* Authentication headers, error handling and the base URL live in one place, and the frontend holds no business logic. A check enforces it: `fetch(` appears in no other file.
+- *Why wait for `authStateReady()`?* After a page reload Firebase restores the session asynchronously. Without the wait, the first request would go out with no token and get a 401.
+- *Is the Firebase config a secret?* No. It only identifies the project. Access is protected by the backend's token check and by security rules that deny all client access.
+- *How do you run it without a cloud sign-in?* With `NEXT_PUBLIC_USE_EMULATORS=true` the app signs in against the local Auth emulator, under the `demo-` project ID, so nothing reaches the real project.
+- *What went wrong while building it?* The agent installed an unrelated npm package named `cn`, mistaking shadcn's `cn` helper function for a package, and left `clsx` and `tailwind-merge` (which the helper needs) as indirect dependencies only. The dependency check caught it before the commit. The package was removed and the two real ones added directly.
+- *Known limits:* a successful response with a non-JSON body makes `apiFetch` throw, and a cancelled request is reported as `network_error`. The emulator address is hard-coded to `127.0.0.1:9099`. `/notebooks` has no sign-in guard yet (T5). The font is fetched from Google at build time, so a build needs network access.
