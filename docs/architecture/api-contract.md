@@ -17,6 +17,7 @@
 | 409 | `not_ready` | The source or notebook is still processing |
 | 422 | `invalid` | Bad input |
 | 429 | `quota_exhausted` | Gemini quota hit; includes `retry_after_s` |
+| 503 | `unavailable` | The AI model is temporarily unavailable after retries; includes a Retry-After header |
 
 - Slow work returns `202` with a status object; clients poll every 2–3 seconds. No WebSockets, and chat answers are not streamed in v1.
 - Lists accept `?limit=&cursor=` and return `{items, next_cursor}`.

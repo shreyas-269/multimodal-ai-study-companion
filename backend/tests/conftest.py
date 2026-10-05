@@ -1,4 +1,5 @@
 import os
+from unittest.mock import MagicMock
 
 import httpx
 import pytest
@@ -135,3 +136,16 @@ def create_emulator_user(
     assert res.status_code == 200, f"Failed to create emulator user: {res.text}"
     data = res.json()
     return data["localId"], data["idToken"]
+
+
+
+@pytest.fixture(autouse=True)
+def mock_gemini_client(monkeypatch):
+    """Ensure no test ever reaches real Gemini; unmocked calls fail."""
+    fake_client = MagicMock()
+    fake_client.models.generate_content.side_effect = RuntimeError(
+        "Unmocked call to Gemini API in test"
+    )
+    monkeypatch.setattr("app.llm.client.get_genai_client", lambda: fake_client)
+    monkeypatch.setattr("app.llm.generate.get_genai_client", lambda: fake_client)
+    yield fake_client

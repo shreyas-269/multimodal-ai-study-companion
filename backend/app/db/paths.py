@@ -36,3 +36,13 @@ def chunk_path(nb: str, chunk_id: str) -> str:
 def source_storage_original_pdf_path(nb: str, src: str) -> str:
     """Return Cloud Storage object path for a source's original PDF."""
     return f"notebooks/{nb}/sources/{src}/original.pdf"
+
+
+def llm_cache_collection_path() -> str:
+    """Return Firestore collection path for LLM cache."""
+    return "llm_cache"
+
+
+def llm_cache_path(key: str) -> str:
+    """Return Firestore document path for an LLM cache entry."""
+    return f"llm_cache/{key}"
