@@ -92,10 +92,85 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/notebooks/{nb}/sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List
+         * @description List sources in a notebook ordered by ref_n ascending with cursor pagination.
+         */
+        get: operations["sources_list"];
+        put?: never;
+        /**
+         * Create
+         * @description Upload and ingest a PDF source document for a notebook.
+         */
+        post: operations["sources_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/notebooks/{nb}/sources/{src}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get
+         * @description Get source document details by ID.
+         */
+        get: operations["sources_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/notebooks/{nb}/sources/{src}/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get File
+         * @description Stream PDF source file with HTTP Range support for viewer.
+         */
+        get: operations["sources_get_file"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** Body_sources_create */
+        Body_sources_create: {
+            /** File */
+            file: string;
+            /**
+             * Role
+             * @default content
+             * @enum {string}
+             */
+            role: "content" | "syllabus";
+        };
         /**
          * Counts
          * @description Aggregate counts for notebook artifacts.
@@ -166,6 +241,53 @@ export interface components {
             items: components["schemas"]["Notebook"][];
             /** Next Cursor */
             next_cursor?: string | null;
+        };
+        /**
+         * SourceList
+         * @description Paginated list of sources.
+         */
+        SourceList: {
+            /** Items */
+            items: components["schemas"]["SourceOut"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /**
+         * SourceOut
+         * @description External view of a source matching api-contract.md.
+         */
+        SourceOut: {
+            /** Id */
+            id: string;
+            /** Ref N */
+            ref_n: number;
+            /** Title */
+            title: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "pdf" | "slides_pdf" | "pptx" | "docx" | "video" | "markdown" | "html" | "xlsx" | "web";
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "content" | "syllabus";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "processing" | "ready" | "failed";
+            /** Stage */
+            stage?: string | null;
+            /** Error */
+            error?: string | null;
+            /** Page Count */
+            page_count?: number | null;
+            /** Duration S */
+            duration_s?: number | null;
+            /** Job Id */
+            job_id?: string | null;
         };
         /**
          * SourceSummary
@@ -430,6 +552,148 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Notebook"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sources_list: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                nb: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sources_create: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                nb: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_sources_create"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sources_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                nb: string;
+                src: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sources_get_file: {
+        parameters: {
+            query?: never;
+            header?: {
+                Range?: string | null;
+                authorization?: string | null;
+            };
+            path: {
+                nb: string;
+                src: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
