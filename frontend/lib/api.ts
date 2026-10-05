@@ -232,3 +232,28 @@ export async function getSourceFileRequest(
     },
   };
 }
+
+export type AskRequest = operations["ask_post"]["requestBody"]["content"]["application/json"];
+export type AskResponse = operations["ask_post"]["responses"][200]["content"]["application/json"];
+export type ParagraphItem = AskResponse["paragraphs"][number];
+export type CitationItem = NonNullable<ParagraphItem["citations"]>[number];
+export type ContextChunkItem = AskResponse["context"][number];
+
+/**
+ * Submits a question to the notebook ask endpoint.
+ */
+export async function ask(
+  notebookId: string,
+  body: AskRequest
+): Promise<AskResponse> {
+  return apiFetch<AskResponse>(
+    `/v1/notebooks/${encodeURIComponent(notebookId)}/ask`,
+    {
+      method: "POST",
+      body,
+      signal: AbortSignal.timeout(150000),
+      timeoutMessage: "The answer took too long. Try again.",
+    }
+  );
+}
+

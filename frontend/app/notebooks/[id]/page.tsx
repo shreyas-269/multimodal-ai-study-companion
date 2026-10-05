@@ -10,7 +10,17 @@ import { AccountBar } from "@/components/account-bar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ApiError, getNotebook, listSources, uploadSource } from "@/lib/api";
+import { Textarea } from "@/components/ui/textarea";
+import { AnswerView } from "@/components/answer";
+import {
+  ApiError,
+  getNotebook,
+  listSources,
+  uploadSource,
+  ask,
+  type AskRequest,
+  type AskResponse,
+} from "@/lib/api";
 import { ViewerProvider, useViewer } from "@/components/viewer-context";
 
 const PdfViewer = dynamic(
@@ -21,10 +31,41 @@ const PdfViewer = dynamic(
   }
 );
 
+interface AnswerItem {
+  id: string;
+  question: string;
+  response: AskResponse;
+}
+
+function formatAskError(err: unknown): string {
+  if (err instanceof ApiError) {
+    if (err.code === "not_ready") {
+      return "This notebook has no processed sources yet.";
+    }
+    if (err.code === "quota_exhausted") {
+      if (err.retryAfterS != null) {
+        return `The AI model's free quota is used up. Try again in ${err.retryAfterS} seconds.`;
+      }
+      return "The AI model's free quota is used up. Try again later.";
+    }
+    if (err.code === "unavailable" || err.status === 503) {
+      return "The AI model is busy. Try again in a minute.";
+    }
+    if (err.code === "timeout") {
+      return err.message;
+    }
+    return err.message;
+  }
+  return "Failed to get an answer.";
+}
+
 export default function NotebookDetailPage() {
+  const params = useParams<{ id: string }>();
+  const id = params?.id ?? "";
+
   return (
     <ViewerProvider>
-      <NotebookContent />
+      <NotebookContent key={id} />
     </ViewerProvider>
   );
 }
@@ -41,6 +82,10 @@ function NotebookContent() {
   const viewerRef = useRef<HTMLElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadMessage, setUploadMessage] = useState<string | null>(null);
+
+  const [question, setQuestion] = useState("");
+  const [allowOutside, setAllowOutside] = useState(false);
+  const [answers, setAnswers] = useState<AnswerItem[]>([]);
 
   const notebookQuery = useQuery({
     queryKey: ["notebook", user?.uid, id],
@@ -83,12 +128,28 @@ function NotebookContent() {
     },
   });
 
-  const viewerSourceId = viewerSource?.sourceId;
+  const askMutation = useMutation({
+    mutationFn: (data: AskRequest) => ask(id, data),
+    retry: false,
+    onSuccess: (response, variables) => {
+      setAnswers((prev) => [
+        {
+          id: `${Date.now()}-${Math.random()}`,
+          question: variables.question,
+          response,
+        },
+        ...prev,
+      ]);
+      setQuestion("");
+    },
+  });
+
+  const navKey = viewerSource?.navKey;
   useEffect(() => {
-    if (viewerSourceId && typeof window !== "undefined" && window.innerWidth < 1024) {
+    if (navKey && typeof window !== "undefined" && window.innerWidth < 1024) {
       viewerRef.current?.scrollIntoView({ behavior: "smooth" });
     }
-  }, [viewerSourceId]);
+  }, [navKey]);
 
   if (loading || notebookQuery.isLoading) {
     return (
@@ -158,6 +219,28 @@ function NotebookContent() {
   };
 
   const sources = sourcesQuery.data?.pages.flatMap((page) => page.items) ?? [];
+  const sourceMap = new Map(sources.map((s) => [s.id, s.title]));
+  const hasReadySource = sources.some((s) => s.status === "ready");
+
+  const handleAskSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (askMutation.isPending || !hasReadySource) return;
+
+    const trimmed = question.trim();
+    if (!trimmed || trimmed.length > 2000) return;
+
+    askMutation.mutate({
+      question: trimmed,
+      allow_outside: allowOutside,
+    });
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+      e.preventDefault();
+      handleAskSubmit();
+    }
+  };
 
   return (
     <main
@@ -268,7 +351,7 @@ function NotebookContent() {
                     </div>
                     <div className="flex items-center gap-4 text-xs text-muted-foreground">
                       {src.page_count != null && <span>{src.page_count} pages</span>}
-                      {src.error && <span className="text-destructive">{src.error}</span>}
+                      {src.error && <span className="text-muted-foreground">{src.error}</span>}
                     </div>
                   </li>
                 ))}
@@ -286,8 +369,132 @@ function NotebookContent() {
             )}
           </section>
 
-          <section className="pt-4 border-t">
-            <p className="text-sm text-muted-foreground">Asking questions arrives in the next task.</p>
+          {/* Ask section */}
+          <section className="space-y-6 pt-4 border-t">
+            <div className="space-y-1">
+              <h2 className="text-lg font-semibold">Ask your sources</h2>
+              <p className="text-xs text-muted-foreground">
+                Ask questions grounded directly in your uploaded materials.
+              </p>
+            </div>
+
+            {sourcesQuery.isPending ? (
+              <div className="rounded-lg border p-4 bg-muted/20">
+                <p className="text-sm text-muted-foreground">
+                  Loading sources…
+                </p>
+              </div>
+            ) : !hasReadySource ? (
+              <div className="rounded-lg border p-4 bg-muted/20">
+                <p className="text-sm text-muted-foreground">
+                  Upload a PDF and wait until it&apos;s ready before asking.
+                </p>
+              </div>
+            ) : (
+              <form onSubmit={handleAskSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="ask-question">Question</Label>
+                    <span className="text-xs text-muted-foreground">
+                      {question.length}/2000
+                    </span>
+                  </div>
+                  <Textarea
+                    id="ask-question"
+                    value={question}
+                    onChange={(e) => setQuestion(e.target.value.slice(0, 2000))}
+                    onKeyDown={handleKeyDown}
+                    placeholder="What would you like to know from your course materials?"
+                    rows={3}
+                    disabled={askMutation.isPending}
+                    required
+                  />
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="allow-outside"
+                    checked={allowOutside}
+                    onChange={(e) => setAllowOutside(e.target.checked)}
+                    disabled={askMutation.isPending}
+                    className="h-4 w-4 rounded border-border"
+                  />
+                  <Label htmlFor="allow-outside" className="text-xs font-normal cursor-pointer">
+                    Allow answers beyond my course
+                  </Label>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <Button
+                    type="submit"
+                    disabled={askMutation.isPending || !question.trim()}
+                  >
+                    {askMutation.isPending ? "Thinking…" : "Ask"}
+                  </Button>
+                </div>
+
+                {askMutation.isPending && (
+                  <p className="text-sm text-muted-foreground">
+                    Thinking… this usually takes a few seconds, sometimes up to a minute or two.
+                  </p>
+                )}
+
+                {askMutation.isError && (
+                  <div className="p-3 border rounded-lg">
+                    <p className="text-sm text-muted-foreground">
+                      {formatAskError(askMutation.error)}
+                    </p>
+                  </div>
+                )}
+              </form>
+            )}
+
+            {/* Answer history for this visit */}
+            {answers.length > 0 && (
+              <div className="space-y-6 pt-4 border-t">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold">Answers</h3>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setAnswers([])}
+                    className="text-xs"
+                  >
+                    Clear
+                  </Button>
+                </div>
+
+                <div className="space-y-6 divide-y">
+                  {answers.map((item, idx) => (
+                    <div
+                      key={item.id}
+                      className={idx > 0 ? "pt-6 space-y-3" : "space-y-3"}
+                    >
+                      <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
+                          Question
+                        </p>
+                        <p className="text-sm font-medium">{item.question}</p>
+                      </div>
+
+                      <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
+                          Answer
+                        </p>
+                        <AnswerView
+                          response={item.response}
+                          sourceMap={sourceMap}
+                          onOpenPdf={(sourceId, title, page) =>
+                            openSource({ sourceId, title, page })
+                          }
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </section>
         </div>
 

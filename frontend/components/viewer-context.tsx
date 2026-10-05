@@ -6,6 +6,7 @@ export interface ViewerSource {
   sourceId: string;
   title: string;
   page: number; // 1-based
+  navKey: number;
 }
 
 export interface OpenSourceOptions {
@@ -27,7 +28,12 @@ export function ViewerProvider({ children }: { children: ReactNode }) {
   const [viewerSource, setViewerSource] = useState<ViewerSource | null>(null);
 
   const openSource = ({ sourceId, title, page = 1 }: OpenSourceOptions) => {
-    setViewerSource({ sourceId, title, page: Math.max(1, page) });
+    setViewerSource((prev) => ({
+      sourceId,
+      title,
+      page: Math.max(1, page),
+      navKey: (prev?.navKey ?? 0) + 1,
+    }));
   };
 
   const setPage = (page: number) => {
