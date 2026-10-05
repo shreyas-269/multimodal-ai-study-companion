@@ -1,9 +1,19 @@
 import { getFirebaseAuth } from "./firebase";
-import type { operations } from "./api-types";
+import type { components, operations } from "./api-types";
 
 export type MeResponse = operations["me_get"]["responses"][200]["content"]["application/json"];
 export type MePatchBody = operations["me_patch"]["requestBody"]["content"]["application/json"];
 export type MePatchResponse = operations["me_patch"]["responses"][200]["content"]["application/json"];
+
+export type NotebookListResponse = operations["notebooks_list"]["responses"][200]["content"]["application/json"];
+export type NotebookCreateResponse = operations["notebooks_create"]["responses"][201]["content"]["application/json"];
+export type NotebookResponse = operations["notebooks_get"]["responses"][200]["content"]["application/json"];
+export type SourceListResponse = operations["sources_list"]["responses"][200]["content"]["application/json"];
+export type SourceCreateResponse = operations["sources_create"]["responses"][202]["content"]["application/json"];
+
+export type NotebookItem = NotebookListResponse["items"][number];
+export type SourceItem = SourceListResponse["items"][number];
+export type SourceRole = components["schemas"]["Body_sources_create"]["role"];
 
 export class ApiError extends Error {
   readonly code: string;
@@ -45,6 +55,7 @@ export async function apiFetch<T>(
     headers?: Record<string, string>;
     signal?: AbortSignal;
     auth?: boolean;
+    timeoutMessage?: string;
   }
 ): Promise<T> {
   const baseUrlEnv = process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -89,8 +100,13 @@ export async function apiFetch<T>(
       signal: options?.signal,
     });
   } catch (err: unknown) {
-    if (err instanceof Error && err.name === "AbortError") {
-      throw new ApiError("aborted", "Request was cancelled", 0);
+    if (err instanceof Error) {
+      if (err.name === "TimeoutError") {
+        throw new ApiError("timeout", options?.timeoutMessage ?? "The request took too long. Try again.", 0);
+      }
+      if (err.name === "AbortError") {
+        throw new ApiError("aborted", "Request was cancelled", 0);
+      }
     }
     throw new ApiError("network_error", "Could not reach the backend", 0);
   }
@@ -130,4 +146,49 @@ export async function patchMe(body: MePatchBody): Promise<MePatchResponse> {
     method: "PATCH",
     body,
   });
+}
+
+export async function listNotebooks(cursor?: string): Promise<NotebookListResponse> {
+  const query = new URLSearchParams({ limit: "20" });
+  if (cursor) query.set("cursor", cursor);
+  return apiFetch<NotebookListResponse>(`/v1/notebooks?${query.toString()}`);
+}
+
+export async function createNotebook(name: string): Promise<NotebookCreateResponse> {
+  return apiFetch<NotebookCreateResponse>("/v1/notebooks", {
+    method: "POST",
+    body: { name },
+  });
+}
+
+export async function getNotebook(notebookId: string): Promise<NotebookResponse> {
+  return apiFetch<NotebookResponse>(`/v1/notebooks/${encodeURIComponent(notebookId)}`);
+}
+
+export async function listSources(notebookId: string, cursor?: string): Promise<SourceListResponse> {
+  const query = new URLSearchParams({ limit: "20" });
+  if (cursor) query.set("cursor", cursor);
+  return apiFetch<SourceListResponse>(
+    `/v1/notebooks/${encodeURIComponent(notebookId)}/sources?${query.toString()}`
+  );
+}
+
+export async function uploadSource(
+  notebookId: string,
+  file: File,
+  role: SourceRole = "content"
+): Promise<SourceCreateResponse> {
+  const formData = new FormData();
+  const fileKey: keyof components["schemas"]["Body_sources_create"] = "file";
+  formData.append(fileKey, file);
+  formData.append("role", role);
+  return apiFetch<SourceCreateResponse>(
+    `/v1/notebooks/${encodeURIComponent(notebookId)}/sources`,
+    {
+      method: "POST",
+      body: formData,
+      signal: AbortSignal.timeout(180000),
+      timeoutMessage: "Processing took longer than 3 minutes. Check the sources list in a minute; it may still finish.",
+    }
+  );
 }
