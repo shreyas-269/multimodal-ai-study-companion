@@ -141,3 +141,28 @@ Template for each feature:
 - *What happens with a scanned or password-protected PDF?* The upload finishes as "failed" with a clear message, such as "This PDF has no extractable text (it may be scanned)." Nothing half-indexed is left behind.
 - *Does vector search work without the cloud?* Yes. A test writes chunks with known vectors to the local Firestore emulator and checks that `find_nearest` with cosine distance returns them in the right order.
 - *What went wrong while building it?* The build review found that one very long run of punctuation with no spaces (like a long URL or formula) produced pieces of 401–402 tokens and silently dropped about 300 characters, because the token offsets included the tokenizer's start and end markers. Splitting without those markers fixed it, and a test now checks that a 1,500-character run keeps every character, including its last word. The review also caught that marking an upload "failed" rewrote the notebook's source list outside a transaction, so a parallel upload could lose its entry; that write is now transactional too.
+
+## C4a · Notebooks, upload and the sources list
+
+**What it does:** The notebooks page lists your notebooks (the demo notebook first, marked "Demo") and lets you create a new one, which opens straight away. A notebook's own page shows its name, status and sources, and lets its owner upload a PDF. Upload takes up to about two minutes, because the backend reads, splits and indexes the PDF inside the request, so the page shows a processing message, disables the controls, and then reports "ready" or "failed" with a short reason. Visitors who don't own the notebook, and everyone on the demo notebook, can see its sources but can't upload.
+
+**Data flow:**
+- *List:* `/notebooks` → `useInfiniteQuery(["notebooks", uid])` → `listNotebooks()` → `GET /v1/notebooks?limit=20` → items plus `next_cursor`; "Load more" asks for the next page with that cursor. The backend already puts the demo notebook first, so the page doesn't re-sort.
+- *Create:* name (trimmed, not empty) → `createNotebook()` → `POST /v1/notebooks` → the list is invalidated, then `router.push` to `/notebooks/<id>`, so the browser's Back button returns to the list.
+- *Notebook page:* `useParams<{ id: string }>()` → `getNotebook()` → `GET /v1/notebooks/{id}`. A 404 shows "Notebook not found.", whether the notebook doesn't exist or belongs to someone else, so the app never reveals which. The sources query (`listSources()`, `GET /v1/notebooks/{id}/sources`) only starts once the notebook has loaded, so a missing notebook never causes a second 404.
+- *Upload:* the browser checks first: a file chosen, a PDF, at most 30 MB. Only then does `uploadSource()` send `POST /v1/notebooks/{id}/sources` as multipart (`file`, `role: "content"`) with a 3-minute timeout. After every attempt, success or not, the sources, the notebook and the notebook list are refreshed, because a request that timed out in the browser may still finish on the server.
+- *Guard:* `use-require-user` waits for Firebase to finish loading, then sends signed-out visitors to `/login`. The account lines and Sign out moved unchanged into a shared `AccountBar`.
+
+**Main files:**
+- `frontend/lib/api.ts`: `listNotebooks`, `createNotebook`, `getNotebook`, `listSources`, `uploadSource`, typed by operation ID; timeouts become `ApiError("timeout")` with a message the caller chooses.
+- `frontend/lib/use-require-user.ts`: the sign-in guard shared by every signed-in page.
+- `frontend/components/account-bar.tsx`: account lines and Sign out (disabled while signing out).
+- `frontend/app/notebooks/page.tsx`: the create form and the paged notebook list.
+- `frontend/app/notebooks/[id]/page.tsx`: the notebook page, upload form and sources list.
+
+**A judge might ask… / my answer:**
+- *Why does upload take so long, and what if it times out?* Checkpoint 1 processes the PDF inside the request: reading every page, splitting it into chunks and computing embeddings locally. That takes about 70 seconds for the 165-page textbook. The browser waits up to 3 minutes; if it gives up, the server may still finish, so the page refreshes the sources list afterwards and the source appears as ready. In S4 this moves to a background job with a progress bar.
+- *Why check the file in the browser if the backend checks it too?* The backend is the real gatekeeper, but checking first means a wrong file fails instantly instead of after a slow upload. The messages are word for word the backend's, so the student sees the same text either way.
+- *Can another user see or upload to my notebook?* No. The backend answers 404 for notebooks you can't see and 403 for uploads to notebooks you don't own; the page hides the upload form for non-owners and the demo notebook, and every cached list is keyed by your user ID.
+- *Why "Notebook not found." for someone else's notebook, not "Access denied"?* Saying "denied" would confirm the notebook exists. "Not found" reveals nothing.
+- *What went wrong while building it?* The plan review merged two overlapping review files into one list of eleven fixes, among them a "Notebook not found." message that flashed before loading finished, a sources request firing for notebooks that don't exist, and upload results not refreshing after a timeout. The final verification found three small issues (a flash of "No sources yet.", a file-input edge case after Back and Forward, and an untyped form field name), all fixed before the walkthrough.
