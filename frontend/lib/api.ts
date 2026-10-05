@@ -47,6 +47,26 @@ function isErrorEnvelope(data: unknown): data is { error: ErrorPayload } {
   return typeof err.code === "string" && typeof err.message === "string";
 }
 
+function getApiBaseUrl(): string {
+  const baseUrlEnv = process.env.NEXT_PUBLIC_API_BASE_URL;
+  if (!baseUrlEnv) {
+    throw new Error("Missing required environment variable: NEXT_PUBLIC_API_BASE_URL");
+  }
+  return baseUrlEnv.replace(/\/+$/, "");
+}
+
+async function getAuthToken(): Promise<string | null> {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  const auth = getFirebaseAuth();
+  await auth.authStateReady();
+  if (!auth.currentUser) {
+    return null;
+  }
+  return auth.currentUser.getIdToken();
+}
+
 export async function apiFetch<T>(
   path: string,
   options?: {
@@ -58,25 +78,18 @@ export async function apiFetch<T>(
     timeoutMessage?: string;
   }
 ): Promise<T> {
-  const baseUrlEnv = process.env.NEXT_PUBLIC_API_BASE_URL;
-  if (!baseUrlEnv) {
-    throw new Error("Missing required environment variable: NEXT_PUBLIC_API_BASE_URL");
-  }
-
   if (!path.startsWith("/")) {
     throw new Error(`apiFetch path must start with '/': got '${path}'`);
   }
 
-  const baseUrl = baseUrlEnv.replace(/\/+$/, "");
+  const baseUrl = getApiBaseUrl();
   const url = `${baseUrl}${path}`;
 
   const headers: Record<string, string> = { ...(options?.headers ?? {}) };
 
-  if (options?.auth !== false && typeof window !== "undefined") {
-    const auth = getFirebaseAuth();
-    await auth.authStateReady();
-    if (auth.currentUser) {
-      const token = await auth.currentUser.getIdToken();
+  if (options?.auth !== false) {
+    const token = await getAuthToken();
+    if (token) {
       headers["Authorization"] = `Bearer ${token}`;
     }
   }
@@ -191,4 +204,31 @@ export async function uploadSource(
       timeoutMessage: "Processing took longer than 3 minutes. Check the sources list in a minute; it may still finish.",
     }
   );
+}
+
+/**
+ * Builds the stream URL and headers for a source's viewer PDF.
+ *
+ * NOTE: pdf.js performs the HTTP GET request itself (including Range header
+ * requests for progressive streaming); our code does not call fetch directly.
+ * This is the one documented exception to "only lib/api.ts calls fetch",
+ * because the target URL and Authorization token are still constructed
+ * strictly within lib/api.ts.
+ */
+export async function getSourceFileRequest(
+  notebookId: string,
+  sourceId: string
+): Promise<{ url: string; httpHeaders: Record<string, string> }> {
+  const baseUrl = getApiBaseUrl();
+  const token = await getAuthToken();
+  if (!token) {
+    throw new ApiError("unauthenticated", "Sign in again to open this PDF.", 401);
+  }
+  const url = `${baseUrl}/v1/notebooks/${encodeURIComponent(notebookId)}/sources/${encodeURIComponent(sourceId)}/file`;
+  return {
+    url,
+    httpHeaders: {
+      Authorization: `Bearer ${token}`,
+    },
+  };
 }
