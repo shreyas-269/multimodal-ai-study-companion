@@ -51,7 +51,7 @@
 | Path | Fields |
 | --- | --- |
 | `jobs/{job}` | type (ingest_source / build_questions / generate_notes), notebook_id, target_id, status (queued / running / waiting_quota / done / failed), attempts, next_run_at, lease_until, progress {done, total}, error, created_by, created_at |
-| `llm_cache/{sha256}` | model, output, created_at. Key = hash of model + prompt + inputs. Laptop scripts also mirror the cache to `backend/.cache/` (git-ignored) |
+| `llm_cache/{sha256}` | model, prompt_version, output, created_at. Key = sha256 of the model, the prompt version, a hash of the full prompt and the caller's cache-key parts, joined by `\x1f`. Written only after a valid response; a hit writes nothing. Laptop scripts also mirror the cache to `backend/.cache/` (git-ignored) |
 
 ## Shared types
 

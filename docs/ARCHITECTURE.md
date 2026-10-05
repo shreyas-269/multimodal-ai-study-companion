@@ -1,6 +1,6 @@
 # Architecture
 
-**Status: v1 (2 Oct 2026, slice S2).** The data model, API contract, libraries and repo layout are final. Change them only through a new line in DECISIONS.md.
+**Status: v1.1 (5 Oct 2026, S3 lane A: C1–C3 built).** The data model, API contract, libraries and repo layout are final. Change them only through a new line in DECISIONS.md.
 
 ## How these docs are organised
 
@@ -44,11 +44,12 @@ Full library list and versions: `architecture/stack.md`.
 - The frontend never talks to Gemini and contains no business logic. `frontend/lib/api.ts` is the only file that calls the backend.
 - Local development uses the Firebase Emulator Suite in Docker. The hosted demo uses the real Firebase project. Environment variables decide which one the backend talks to.
 - The demo notebook is shared: every signed-in user can read its content, and each user gets their own chats, checkboxes, quizzes and mastery (see "Shared content, private state" in `architecture/data-model.md`).
+- Locally, exactly one backend server runs, in lane A's backend tab. On Windows two uvicorn processes can both listen on port 8000 and requests then go to either one, so no agent and no other window starts a backend.
 
 ## Ingestion pipeline (per source)
 
 1. Normalise: PowerPoint and Word → PDF (LibreOffice); video → timestamped transcript (faster-whisper) + keyframes at scene changes (ffmpeg); Markdown syllabus → headings. Licence and terms pages are detected by their text and excluded from retrieval and citations. Excel, HTML and websites are S10 extras.
-2. Chunk, recording each chunk's exact location (see Location in `architecture/data-model.md`). Slide handouts with several slides per page are split per slide using the `slide_grid` manifest column; other slide PDFs are one slide per page. Chunks stay under about 400 tokens (the embedding model's limit is 512).
+2. Chunk, recording each chunk's exact location (see Location in `architecture/data-model.md`). Slide handouts with several slides per page are split per slide using the `slide_grid` manifest column; other slide PDFs are one slide per page. Chunks hold at most 400 tokens, counted with the embedding model's own tokenizer (its limit is 512), and never cross a page.
 3. Read figures and diagrams with Gemini Flash vision.
 4. Extract knowledge items (definitions, formulas, theorems, worked examples, figures, facts, edge cases) and tag each chunk and item to a subtopic, in batched calls. A syllabus, if given, seeds the topic tree.
 5. Embed with bge-small-en-v1.5; store chunks + vectors in Firestore.
@@ -56,12 +57,16 @@ Full library list and versions: `architecture/stack.md`.
 
 Every source is processed once and every model output is cached. Video ingestion runs only on the laptop (`backend/scripts/ingest_course.py`); on the hosted demo, video upload explains this instead of processing. PDF, PPTX, DOCX and Markdown uploads are processed on the hosted demo through the job queue.
 
+**Checkpoint-1 state (S3):** only PDFs are accepted, up to 30 MB, and they are processed inside the upload request: text per physical page with PyMuPDF in its native reading order, page-bounded chunks with IDs `{source_id}-{seq:05d}` from 00000, embeddings from bge-small-en-v1.5, written in batches of up to 500. A failed upload returns status "failed" with a short error, deletes its partial chunks and keeps its original file for a retry. Steps 3, 4 and 6, page labels, licence-page exclusion and slide splitting arrive in S4, which also moves processing into the job queue.
+
 ## Chat request flow
 
 1. Retrieve: one nearest-neighbour search over the notebook's chunks (top 40), then a rerank in Python that boosts the chat's folder topic and its prerequisites, plus any `#`-referenced notes file (searched, not pasted whole). A chat's folder topic is its nearest ancestor in the tree that is a real topic; with none, the whole notebook is searched equally.
 2. Send Gemini the chunks, the format template, the student's instructions and, if Study Coach is on, one line about weak prerequisites.
 3. Gemini returns paragraphs, each citing the chunks it came from. A paragraph with no citation is marked `outside_course` and shown in the "Beyond your course" box.
 4. `POST /v1/notebooks/{nb}/ask` returns the paragraphs **and** the retrieved context; the evaluation harness calls it. Chat messages run the same function, then save the message and record a chat signal for the learner model.
+
+**Checkpoint-1 state (S3):** `/ask` embeds the question with BGE's query instruction, takes the top 40 chunks by cosine distance, drops chunks of sources that aren't ready, and sends the top 10 without reranking; S5 adds the rerank, the topic and prerequisite boost, `#` references and the format template. The chunks go to Gemini as numbered `<<<SOURCE n>>>` blocks with the question last; Gemini cites numbers, which the backend maps to chunk IDs, dropping unknown numbers and chunks without a page. With `allow_outside` false (the default), a question the sources don't answer gets one uncited "not covered" paragraph. All Gemini calls go through `backend/app/llm/`: JSON output against a Pydantic schema, retries only on 5xx, timeouts and connection errors (at most 3 attempts or 100 s), 429 → `quota_exhausted` (never retried), persistent failure → 503 `unavailable`, and an `llm_cache` key that includes a hash of the full prompt.
 
 ## Background jobs
 
@@ -78,6 +83,8 @@ Long work (source ingestion on the hosted demo, question bank building, complete
 - **BKT parameters (fixed):** prior 0.3; guess 0.25 (MCQ), 0.1 (short answer), 0.05 (numerical); slip 0.1; learn 0.15. A checkbox tick lifts a topic to at least 0.8. Forgetting is applied when mastery is read.
 - **Firestore is shaped by how screens read data:** documents in collections, no joins, some data stored twice so each screen loads in one query.
 - **No colour-coding** anywhere in the UI.
+- **Access checks:** every notebook route goes through `get_readable_notebook` (owner, or the demo) or `get_owned_notebook` (owner only) in `backend/app/api/access.py`. A notebook you can't see is 404, never 403; 403 means readable but not yours. Notebook and source IDs, and list cursors, are checked with a full-string match before any Firestore read.
+- **Tests never call real Gemini:** an autouse fixture replaces the Gemini client with a fake, so any call a test hasn't mocked fails, and the suite passes identically with a fake API key. Tests mock the fake client's `models.generate_content` and raise the SDK's real error classes, so the retry logic stays under test. Tests delete only the documents they created and never wipe the emulator.
 
 ## Cost rules (also architecture rules)
 
@@ -87,6 +94,7 @@ Long work (source ingestion on the hosted demo, question bank building, complete
 4. Background jobs run through the rate-limit-aware queue that retries and resumes instead of restarting.
 5. Simulated students never call the AI; they answer in code from the existing question bank, using the Study Coach with in-memory storage.
 6. Never put Gemini calls or Firestore reads inside unbounded loops.
+7. Builds and test runs never call the real Gemini API; every live check states its call budget (usually 1 to 3 calls).
 
 ## Acceptance criteria
 
