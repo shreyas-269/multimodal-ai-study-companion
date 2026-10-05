@@ -204,3 +204,24 @@ Template for each feature:
 - *What happens when the sign-in token expires after an hour?* pdf.js keeps fetching pages with the token it was given, so a later page fails to load. The viewer treats document, source and page errors alike and shows "Couldn't load this PDF." with "Try again", which fetches a fresh token and reopens at the same page.
 - *Why is a token never cached?* A cached token is exactly what goes stale. Every open and every retry asks Firebase for a current one, which it refreshes automatically when needed.
 - *What went wrong while building it?* The plan review caught three serious bugs before any code was written: the page couldn't reach its own viewer context, switching sources would have briefly shown the old PDF, and an expired token would have failed silently as a page error. The recheck caught that a retry would briefly reuse the old token. The final verification found small page-box issues (0 and negative numbers weren't clamped, and a clamped number wasn't shown), fixed before testing.
+
+## C4b · Ask box and citations
+
+**What it does:** On a notebook page you type a question and get an answer built only from your sources. Each paragraph is rendered as Markdown with real maths, and ends with citation buttons such as "textbook p. 72"; clicking one opens the PDF viewer at exactly that page. Any paragraph without a source, including the reply "your course material doesn't cover this", appears in a separate "Beyond your course" box marked "Not from your sources." "Passages used" shows the ten passages the answer was based on, with their page and score. Problems show plain messages instead of failing silently: no processed source yet, the AI quota used up (with how many seconds to wait), the model busy, or a timeout.
+
+**Data flow:** question (trimmed, up to 2,000 characters) → `ask()` in `lib/api.ts` → `POST /v1/notebooks/{nb}/ask {question, allow_outside}` with a 150-second timeout → the backend retrieves ten passages, asks Gemini and returns `{paragraphs, context, model, latency_ms}` → the answer is kept in the page's state for this visit, newest first → `components/answer.tsx` converts `\( … \)` and `\[ … \]` into `$…$` and `$$…$$` (code untouched) and renders the Markdown with react-markdown, remark-math and rehype-katex, never as raw HTML → a citation click calls `openSource({source_id, page, title})` in the viewer context, whose counter makes the viewer jump to that page and, on narrow screens, scroll into view, even when that PDF is already open.
+
+**Main files:**
+- `frontend/components/answer.tsx`: paragraphs, maths, citation buttons, the "Beyond your course" box and "Passages used".
+- `frontend/app/notebooks/[id]/page.tsx`: the ask form, the request, the answers list and the scroll-to-viewer behaviour.
+- `frontend/lib/api.ts`: `ask()`, typed from the `ask_post` operation.
+- `frontend/components/viewer-context.tsx`: the navigation counter that lets a citation reopen a page in an already-open PDF.
+- `frontend/components/ui/textarea.tsx`: the shadcn text box.
+
+**A judge might ask… / my answer:**
+- *How do I know the answer isn't made up?* Every course paragraph links to the exact page it came from, so you can check it in one click. Anything without a source is never shown as course content; it always sits in the labelled "Beyond your course" box.
+- *Why is "not covered" inside the "Beyond your course" box?* The rule is simple and safe: every uncited paragraph goes there, even if the model breaks its instructions. So nothing unsourced can ever look like it came from your course.
+- *Why doesn't the page retry when the AI fails?* The free quota is small. The backend already retries server errors; retrying again from the browser would only burn requests. Instead the page says what happened and how long to wait.
+- *Why convert maths delimiters?* The maths renderer only understands `$…$`, and language models sometimes write `\( … \)`. Converting first means formulas always render.
+- *Can an answer inject code into the page?* No. Markdown is rendered without raw HTML, and links open in a new tab with `noopener`.
+- *What went wrong while building it?* The plan review caught two bugs that would have broken the page: a button property that doesn't exist in this UI kit (the build would fail), and React hooks placed after early returns (React would crash). The verification found the shadcn command had again installed an unrelated npm package called `cn`; it was removed. The live test also hit Gemini's "high demand" outage, and the page showed "The AI model is busy" exactly as designed.
