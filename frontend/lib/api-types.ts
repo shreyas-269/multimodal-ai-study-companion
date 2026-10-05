@@ -156,10 +156,62 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/notebooks/{nb}/ask": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post
+         * @description Stateless source-grounded question answering over a notebook.
+         */
+        post: operations["ask_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * AskRequest
+         * @description Request payload for POST /v1/notebooks/{nb}/ask.
+         */
+        AskRequest: {
+            /** Question */
+            question: string;
+            /** Topic Id */
+            topic_id?: string | null;
+            refs?: components["schemas"]["Refs"] | null;
+            /**
+             * Allow Outside
+             * @default false
+             */
+            allow_outside: boolean;
+            /** Pasted Images */
+            pasted_images?: string[];
+        };
+        /**
+         * AskResponse
+         * @description Response envelope for POST /v1/notebooks/{nb}/ask matching api-contract.md.
+         */
+        AskResponse: {
+            /** Paragraphs */
+            paragraphs: components["schemas"]["Paragraph"][];
+            /** Context */
+            context: components["schemas"]["ContextChunk"][];
+            /** Model */
+            model: string;
+            /** Latency Ms */
+            latency_ms: number;
+        };
         /** Body_sources_create */
         Body_sources_create: {
             /** File */
@@ -170,6 +222,32 @@ export interface components {
              * @enum {string}
              */
             role: "content" | "syllabus";
+        };
+        /**
+         * Citation
+         * @description Source citation pointing to original material.
+         */
+        Citation: {
+            /** Chunk Id */
+            chunk_id: string;
+            loc: components["schemas"]["Location"];
+            /** Label */
+            label: string;
+            /** Open */
+            open: components["schemas"]["OpenPdfTarget"] | components["schemas"]["OpenYouTubeTarget"];
+        };
+        /**
+         * ContextChunk
+         * @description Retrieved chunk context returned alongside the answer.
+         */
+        ContextChunk: {
+            /** Chunk Id */
+            chunk_id: string;
+            /** Text */
+            text: string;
+            loc: components["schemas"]["Location"];
+            /** Score */
+            score: number;
         };
         /**
          * Counts
@@ -196,6 +274,52 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /**
+         * Image
+         * @description Image reference within a paragraph.
+         */
+        Image: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "extracted" | "diagram" | "ai_generated" | "search_link";
+            /** Url */
+            url: string;
+            /** Caption */
+            caption: string;
+            citation?: components["schemas"]["Citation"] | null;
+        };
+        /**
+         * Location
+         * @description Source location matching data-model.md.
+         */
+        Location: {
+            /** Source Id */
+            source_id: string;
+            /** Page */
+            page?: number | null;
+            /** Page Label */
+            page_label?: string | null;
+            /** Slide */
+            slide?: number | null;
+            /** Bbox */
+            bbox?: number[] | null;
+            /** T Start S */
+            t_start_s?: number | null;
+            /** T End S */
+            t_end_s?: number | null;
+            /** Section */
+            section?: string | null;
+            /** Url */
+            url?: string | null;
+            /** Anchor */
+            anchor?: string | null;
+            /** Sheet */
+            sheet?: string | null;
+            /** Cell Range */
+            cell_range?: string | null;
         };
         /**
          * Notebook
@@ -241,6 +365,67 @@ export interface components {
             items: components["schemas"]["Notebook"][];
             /** Next Cursor */
             next_cursor?: string | null;
+        };
+        /**
+         * OpenPdfTarget
+         * @description Target for opening a PDF viewer at a specific page and optional bounding box.
+         */
+        OpenPdfTarget: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "pdf";
+            /** Source Id */
+            source_id: string;
+            /** Page */
+            page: number;
+            /** Bbox */
+            bbox?: number[] | null;
+        };
+        /**
+         * OpenYouTubeTarget
+         * @description Target for opening a YouTube video at a specific URL with timestamp offset.
+         */
+        OpenYouTubeTarget: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "youtube";
+            /** Url */
+            url: string;
+        };
+        /**
+         * Paragraph
+         * @description Generated answer paragraph with supporting citations.
+         */
+        Paragraph: {
+            /** Id */
+            id: string;
+            /** Section */
+            section?: string | null;
+            /** Text */
+            text: string;
+            /** Citations */
+            citations?: components["schemas"]["Citation"][];
+            /**
+             * Outside Course
+             * @default false
+             */
+            outside_course: boolean;
+            /** Images */
+            images?: components["schemas"]["Image"][];
+        };
+        /**
+         * Refs
+         * @description Explicit references filter for search (accepted and ignored until S5).
+         */
+        Refs: {
+            /** Sources */
+            sources?: string[];
+            /** Files */
+            files?: string[];
         };
         /**
          * SourceList
@@ -694,6 +879,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ask_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                nb: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AskRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AskResponse"];
                 };
             };
             /** @description Validation Error */
