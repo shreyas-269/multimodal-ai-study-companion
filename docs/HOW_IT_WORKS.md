@@ -306,3 +306,22 @@ Template for each feature:
 - *Does the cache still make repeats free?* Yes. It's checked under every model's key before any call. In testing, the repeat question came back in 196 ms with no Gemini call.
 - *How was it tested without spending quota?* A fake client replays 429s, 503s and timeouts. The deadline is tested with an injected clock and by checking the exact stop value and timeouts the code computes, never by waiting. A fixture pins the older tests to one model, so they don't depend on what's in `.env`. Only the final checks made real calls: one question each.
 - *What went wrong while building it?* The plan review caught two bugs before any code was written: a 429 would have triggered the skip even with a single model, changing existing behaviour, and the 150 s budget was checked only between attempts, so one request could run to about 280 s. The verify then found that the timeout was still set once per model rather than once per attempt. A fake-clock simulation ran to 183.7 s against the 150 s deadline, so the timeout is now recomputed at the start of every attempt, and the re-verify's simulation of the same scenario stops at exactly 150 s. The verify also found that the existing tests silently picked up the fallback models from `.env`, which a fixture now prevents. During the first live check, the first two models failed and the third answered with correct citations: the chain doing its job for real. In the re-verify a few hours later, the primary model answered directly.
+
+---
+
+## F2a · Three-panel notebook page
+
+**What it does:** On a laptop-sized screen, a notebook opens as a full-window workspace, like NotebookLM: a slim header with the notebook's name and your account, your sources on the left (with "Add a source" below them), the question box and answers in the middle, and, when you open a PDF or click a citation, the document on the right. Each panel scrolls on its own, so you can read the cited page while the answer stays in view. On a phone the panels stack, and clicking a citation scrolls down to the document.
+
+**Data flow:** unchanged from C4a, C4b, C5 and F1b. The page makes the same requests (`getNotebook`, `listSources`, `uploadSource`, `ask`), with the same query keys and timeouts. Only the layout changed: a header bar, then a `<main>` with three panels (`aside` Sources, `section` Ask, `aside` PDF viewer). The right panel exists only while the viewer context has an open source, so opening a citation adds it and closing the viewer removes it. The account bar has a compact one-line mode used only in this header.
+
+**Main files:**
+- `frontend/app/notebooks/[id]/page.tsx`: the header and the three panels.
+- `frontend/components/account-bar.tsx`: the new `compact` mode; the default mode is unchanged on /notebooks and /settings.
+- `frontend/components/viewer-context.tsx` and `frontend/components/pdf-viewer.tsx`: unchanged; they decide when the right panel shows and what it displays.
+
+**A judge might ask… / my answer:**
+- *Why three panels?* Studying from sources means reading an answer and checking the page it cites at the same time. Keeping sources, answers and the document side by side removes the scrolling back and forth.
+- *Why is there no topic list yet?* The topics come from the backend's topic tagging, which lands next. The left panel already has the spot for it, above the sources.
+- *Does it work on a phone?* Yes. Below 1024 pixels the panels stack, and clicking a citation scrolls to the document.
+- *Did the redesign risk breaking anything?* It changed markup and styles only. Every request, error message and timeout stayed the same, and a separate check compared the code before and after to confirm it.
