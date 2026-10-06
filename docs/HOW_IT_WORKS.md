@@ -247,3 +247,39 @@ Template for each feature:
 - *Why a card and not a pop-up?* A pop-up blocks the page. The card sits at the top of the notebooks list, so you can ignore it and still open the demo notebook straight away.
 - *Can custom instructions make the tutor ignore the course?* No. They change how answers are written, not where the facts come from. The backend still decides which passages the model sees and drops any citation that doesn't match one of them.
 - *Can anyone else see my settings?* No. The browser never reads Firestore directly (the security rules deny all client access), and the backend only returns `users/{uid}` to the user with that uid's token.
+
+---
+
+## F1b · Source cards
+
+**What it does:** Each source on a notebook page is a card showing its title, its kind (PDF, Slides, Video, PowerPoint…), "Syllabus" if it's the syllabus, and its page count or length. A source that isn't ready shows "Queued", "Processing…" or "Failed" with the reason. When a source has a licence and attribution, as every file in the demo course will once its notebook is built, the card shows them, for example "Licence: CC BY-NC-SA 4.0" followed by "MIT OpenCourseWare, 6.041…"; when it has none, the card shows nothing extra. Ready PDFs have an Open button that opens the viewer; ready lecture videos have a "Watch on YouTube" link.
+
+**Data flow:** notebook page → `listSources()` in `lib/api.ts` → `GET /v1/notebooks/{nb}/sources` → the backend reads `notebooks/{nb}/sources` and builds each item with `SourceOut.from_stored`, which adds `licence`, `attribution` and, for videos only, a `youtube_url` made from `youtube_id` and `offset_s` → `components/source-card.tsx` renders one card per item → Open calls `openSource({sourceId, title, page: 1})` in the viewer context; a video's link uses `youtube_url` exactly as the backend built it. The demo course's licence and attribution come from `manifest.csv` when the demo notebook is built; a student's own uploads have none.
+
+**Main files:**
+- `frontend/components/source-card.tsx`: the card, kind labels, durations, status and licence block.
+- `frontend/app/notebooks/[id]/page.tsx`: the grid of cards (one column while the viewer is open).
+- `backend/app/models/source.py`: `SourceOut` and `from_stored`, including how `youtube_url` is built.
+- `frontend/lib/api-types.ts`: regenerated after SRC1, so the frontend's types match the backend.
+
+**A judge might ask… / my answer:**
+- *Why show licences at all?* The demo course is MIT OpenCourseWare (CC BY-NC-SA 4.0) and Grinstead & Snell (GNU FDL). Both licences require attribution, so every card credits its source where students actually see it, not just in the README.
+- *Why doesn't the frontend build the YouTube link?* One place builds links: the backend. Citations and source cards then always agree on the video and the timestamp offset, and a frontend bug can't send you to the wrong video.
+- *Could a malicious attribution inject code?* No. It's rendered as plain text, never as HTML or Markdown.
+- *Where do the licence values come from?* The course manifest, `manifest.csv`, which records each file's licence and attribution and is read when the demo notebook is built.
+
+---
+
+## FX1 · App font
+
+**What it does:** Every page now uses Geist, the sans-serif font the app was meant to have, instead of the browser's default serif.
+
+**Data flow:** `app/layout.tsx` loads Geist with next/font, which self-hosts the font files (no request to Google at runtime) and exposes it as the CSS variable `--font-geist-sans` on `<html>` → `app/globals.css` maps Tailwind's `--font-sans` to `var(--font-geist-sans)` → the body uses `font-sans`, so every page inherits Geist. Code uses Geist Mono the same way through `--font-mono`.
+
+**Main files:**
+- `frontend/app/globals.css`: the theme line `--font-sans: var(--font-geist-sans);`.
+- `frontend/app/layout.tsx`: loads Geist and Geist Mono and puts their variables on `<html>`.
+
+**A judge might ask… / my answer:**
+- *Why was the app in a serif font before?* The shadcn theme defined `--font-sans` as `var(--font-sans)`, which refers to itself. CSS treats that as invalid, so the page had no font set and the browser fell back to its default serif. Pointing it at the font next/font actually loads fixed it.
+- *Does the font slow the page down?* No. next/font downloads it at build time and serves it from our own site, with a size-matched fallback so the layout doesn't jump while it loads.
