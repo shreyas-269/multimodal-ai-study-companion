@@ -105,3 +105,13 @@ Written by Shreyas before each feature is built (3–5 observable checks each). 
 - Upload `L02-slides.pdf`, ask "what is Bayes' rule?": the answer cites a source.
 - Select a paragraph, click **Source**: the PDF opens on the exact page, and that page actually states Bayes' rule.
 - Ask "what's the capital of France?": the answer is declined or sits entirely in the "Beyond your course" box.
+
+## Frontend (checkpoint-1 state)
+
+- Next.js 16 (App Router, TypeScript) in `frontend/`, styled with Tailwind and shadcn/ui's base-nova style, which is built on Base UI rather than Radix (no `asChild`). Monochrome throughout.
+- Pages: `/login` (email/password sign-in, create account, continue as guest); `/notebooks` (account bar, create notebook, paged list with the demo notebook first); `/notebooks/[id]` (name and status, owner-only PDF upload, sources list with Open buttons, the ask box with answers, and the PDF viewer as a side panel, below the content on narrow screens).
+- Data access: `lib/api.ts` is the only file that builds backend requests, and every function takes its types from `lib/api-types.ts` by operation ID. TanStack Query keys always include the user's uid; queries run only once Firebase auth has loaded (`use-require-user`); the cache is cleared on sign-out. `lib/api-types.ts` is regenerated only when `backend/` has no uncommitted changes.
+- PDF viewer: react-pdf 11 (pdfjs-dist 6.3) with a bundled worker, loaded client-only. Files come from `/file` with Range requests and a fresh, never-cached token; pdf.js doing that fetch is the one documented exception to the `lib/api.ts` rule. Page numbers are physical pages, the same as `Location.page` and `Citation.open.page`.
+- Answers: react-markdown with remark-math and rehype-katex, never raw HTML; `\( \)` and `\[ \]` are converted to `$` and `$$` first. Every `outside_course` paragraph goes in the "Beyond your course" box. Citations call `openSource(source_id, page)`. The frontend never retries `/ask`.
+- Timeouts: upload 3 minutes (processing happens inside the request), ask 150 seconds.
+- Not built yet: topic list, chats, quizzes, progress (lane B's F1b–F5 in the 6 Oct replan). The drag-and-drop tree panel is cut.
