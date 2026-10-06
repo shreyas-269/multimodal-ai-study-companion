@@ -92,7 +92,7 @@ response: { user_message: Message, assistant_message: Message }   # assistant_me
 **Source** (returned by upload and list)
 
 ```text
-{ id, ref_n, title, kind, role, status, stage, error?, page_count?, duration_s?, job_id? }
+{ id, ref_n, title, kind, role, status, stage, error?, page_count?, duration_s?, licence?, attribution?, youtube_url?, job_id? }
 ```
 
 **Quiz question** (as sent to the student; answer keys never leave the backend before answering)

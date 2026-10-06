@@ -653,3 +653,263 @@ def test_source_encrypted_pdf_rejected_cleanly(user_tracker, notebook_tracker):
 
     nb_dict = db.document(notebook_path(nb_id)).get().to_dict()
     assert nb_dict["status"] == "empty"
+
+
+def test_source_normal_pdf_upload_licence_attribution_youtube_url_null(
+    user_tracker, notebook_tracker
+):
+    """Normal PDF upload: upload, list, and get return licence, attribution, youtube_url null."""
+    uid, token = create_emulator_user(email=f"normal_pdf_{uuid4().hex[:8]}@example.com")
+    user_tracker.append(uid)
+    nb_id = create_test_notebook(token)
+    notebook_tracker.append(nb_id)
+
+    pdf_bytes = create_pdf(["Normal PDF content without custom licence or video data."])
+    headers = {"Authorization": f"Bearer {token}"}
+
+    res_upload = client.post(
+        f"/v1/notebooks/{nb_id}/sources",
+        headers=headers,
+        files={"file": ("normal.pdf", BytesIO(pdf_bytes), "application/pdf")},
+    )
+    assert res_upload.status_code == 202
+    upload_data = res_upload.json()
+    assert upload_data["licence"] is None
+    assert upload_data["attribution"] is None
+    assert upload_data["youtube_url"] is None
+    src_id = upload_data["id"]
+
+    res_list = client.get(f"/v1/notebooks/{nb_id}/sources", headers=headers)
+    assert res_list.status_code == 200
+    list_items = res_list.json()["items"]
+    assert len(list_items) == 1
+    assert list_items[0]["id"] == src_id
+    assert list_items[0]["licence"] is None
+    assert list_items[0]["attribution"] is None
+    assert list_items[0]["youtube_url"] is None
+
+    res_get = client.get(f"/v1/notebooks/{nb_id}/sources/{src_id}", headers=headers)
+    assert res_get.status_code == 200
+    get_data = res_get.json()
+    assert get_data["id"] == src_id
+    assert get_data["licence"] is None
+    assert get_data["attribution"] is None
+    assert get_data["youtube_url"] is None
+
+
+def test_source_seeded_pdf_licence_and_attribution(user_tracker, notebook_tracker):
+    """Seeded PDF with licence and attribution returns those exact strings; youtube_url null."""
+    uid, token = create_emulator_user(email=f"seeded_pdf_{uuid4().hex[:8]}@example.com")
+    user_tracker.append(uid)
+    nb_id = create_test_notebook(token)
+    notebook_tracker.append(nb_id)
+
+    db = get_db()
+    src_id = generate_source_id(nb_id)
+    licence_val = "CC BY-NC-SA 4.0"
+    attribution_val = "MIT OpenCourseWare 6.041, Fall 2010"
+
+    source_doc = {
+        "ref_n": 1,
+        "title": "6.041 Probability Notes",
+        "kind": "pdf",
+        "role": "content",
+        "filename": "notes.pdf",
+        "storage_path": f"notebooks/{nb_id}/sources/{src_id}/original.pdf",
+        "viewer_path": f"notebooks/{nb_id}/sources/{src_id}/original.pdf",
+        "youtube_id": None,
+        "offset_s": None,
+        "duration_s": None,
+        "page_count": 5,
+        "licence": licence_val,
+        "attribution": attribution_val,
+        "status": "ready",
+        "stage": "done",
+        "error": None,
+        "created_at": datetime.now(UTC),
+    }
+    db.document(f"notebooks/{nb_id}/sources/{src_id}").set(source_doc)
+
+    headers = {"Authorization": f"Bearer {token}"}
+
+    res_list = client.get(f"/v1/notebooks/{nb_id}/sources", headers=headers)
+    assert res_list.status_code == 200
+    list_items = res_list.json()["items"]
+    assert len(list_items) == 1
+    assert list_items[0]["id"] == src_id
+    assert list_items[0]["licence"] == licence_val
+    assert list_items[0]["attribution"] == attribution_val
+    assert list_items[0]["youtube_url"] is None
+
+    res_get = client.get(f"/v1/notebooks/{nb_id}/sources/{src_id}", headers=headers)
+    assert res_get.status_code == 200
+    get_data = res_get.json()
+    assert get_data["id"] == src_id
+    assert get_data["licence"] == licence_val
+    assert get_data["attribution"] == attribution_val
+    assert get_data["youtube_url"] is None
+
+
+def test_source_seeded_video_youtube_url_variations(user_tracker, notebook_tracker):
+    """Test youtube_url computation for seeded video sources and kind='pdf'."""
+    from app.models.source import SourceOut
+
+    uid, token = create_emulator_user(email=f"video_src_{uuid4().hex[:8]}@example.com")
+    user_tracker.append(uid)
+    nb_id = create_test_notebook(token)
+    notebook_tracker.append(nb_id)
+
+    db = get_db()
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Case 1: video, youtube_id "j9WZyLZCBzs", offset_s 0 -> "https://www.youtube.com/watch?v=j9WZyLZCBzs"
+    src_v1 = generate_source_id(nb_id)
+    doc_v1 = {
+        "ref_n": 1,
+        "title": "Lecture 1 Video",
+        "kind": "video",
+        "role": "content",
+        "filename": "lec1.mp4",
+        "storage_path": "",
+        "viewer_path": "",
+        "youtube_id": "j9WZyLZCBzs",
+        "offset_s": 0,
+        "duration_s": 3000.0,
+        "licence": None,
+        "attribution": None,
+        "status": "ready",
+        "stage": "done",
+        "error": None,
+        "created_at": datetime.now(UTC),
+    }
+    db.document(f"notebooks/{nb_id}/sources/{src_v1}").set(doc_v1)
+
+    # Case 2: video, youtube_id "j9WZyLZCBzs", offset_s 12.7 -> "https://www.youtube.com/watch?v=j9WZyLZCBzs&t=12s"
+    src_v2 = generate_source_id(nb_id)
+    doc_v2 = {
+        "ref_n": 2,
+        "title": "Lecture 2 Video",
+        "kind": "video",
+        "role": "content",
+        "filename": "lec2.mp4",
+        "storage_path": "",
+        "viewer_path": "",
+        "youtube_id": "j9WZyLZCBzs",
+        "offset_s": 12.7,
+        "duration_s": 3000.0,
+        "licence": None,
+        "attribution": None,
+        "status": "ready",
+        "stage": "done",
+        "error": None,
+        "created_at": datetime.now(UTC),
+    }
+    db.document(f"notebooks/{nb_id}/sources/{src_v2}").set(doc_v2)
+
+    # Case 3: video, youtube_id "j9WZyLZCBzs", offset_s 0.4 -> no &t= in youtube_url
+    src_v3 = generate_source_id(nb_id)
+    doc_v3 = {
+        "ref_n": 3,
+        "title": "Lecture 3 Video",
+        "kind": "video",
+        "role": "content",
+        "filename": "lec3.mp4",
+        "storage_path": "",
+        "viewer_path": "",
+        "youtube_id": "j9WZyLZCBzs",
+        "offset_s": 0.4,
+        "duration_s": 3000.0,
+        "licence": None,
+        "attribution": None,
+        "status": "ready",
+        "stage": "done",
+        "error": None,
+        "created_at": datetime.now(UTC),
+    }
+    db.document(f"notebooks/{nb_id}/sources/{src_v3}").set(doc_v3)
+
+    # Case 4: seeded source with kind "pdf" but youtube_id set -> youtube_url null
+    src_pdf = generate_source_id(nb_id)
+    doc_pdf = {
+        "ref_n": 4,
+        "title": "PDF with youtube_id",
+        "kind": "pdf",
+        "role": "content",
+        "filename": "doc.pdf",
+        "storage_path": "",
+        "viewer_path": "",
+        "youtube_id": "j9WZyLZCBzs",
+        "offset_s": 12.7,
+        "duration_s": None,
+        "licence": None,
+        "attribution": None,
+        "status": "ready",
+        "stage": "done",
+        "error": None,
+        "created_at": datetime.now(UTC),
+    }
+    db.document(f"notebooks/{nb_id}/sources/{src_pdf}").set(doc_pdf)
+
+    # Verify through API (GET /v1/notebooks/{nb}/sources/{src})
+    res_g1 = client.get(f"/v1/notebooks/{nb_id}/sources/{src_v1}", headers=headers)
+    assert res_g1.status_code == 200
+    assert res_g1.json()["youtube_url"] == "https://www.youtube.com/watch?v=j9WZyLZCBzs"
+
+    res_g2 = client.get(f"/v1/notebooks/{nb_id}/sources/{src_v2}", headers=headers)
+    assert res_g2.status_code == 200
+    assert res_g2.json()["youtube_url"] == "https://www.youtube.com/watch?v=j9WZyLZCBzs&t=12s"
+
+    res_g3 = client.get(f"/v1/notebooks/{nb_id}/sources/{src_v3}", headers=headers)
+    assert res_g3.status_code == 200
+    assert res_g3.json()["youtube_url"] == "https://www.youtube.com/watch?v=j9WZyLZCBzs"
+
+    res_g4 = client.get(f"/v1/notebooks/{nb_id}/sources/{src_pdf}", headers=headers)
+    assert res_g4.status_code == 200
+    assert res_g4.json()["youtube_url"] is None
+
+    # Verify through API (GET /v1/notebooks/{nb}/sources)
+    res_list = client.get(f"/v1/notebooks/{nb_id}/sources", headers=headers)
+    assert res_list.status_code == 200
+    items = {item["id"]: item for item in res_list.json()["items"]}
+    assert items[src_v1]["youtube_url"] == "https://www.youtube.com/watch?v=j9WZyLZCBzs"
+    assert items[src_v2]["youtube_url"] == "https://www.youtube.com/watch?v=j9WZyLZCBzs&t=12s"
+    assert items[src_v3]["youtube_url"] == "https://www.youtube.com/watch?v=j9WZyLZCBzs"
+    assert items[src_pdf]["youtube_url"] is None
+
+    # Verify unit-level SourceOut.from_stored
+    assert SourceOut.from_stored(doc_v1).youtube_url == "https://www.youtube.com/watch?v=j9WZyLZCBzs"
+    assert SourceOut.from_stored(doc_v2).youtube_url == "https://www.youtube.com/watch?v=j9WZyLZCBzs&t=12s"
+    assert SourceOut.from_stored(doc_v3).youtube_url == "https://www.youtube.com/watch?v=j9WZyLZCBzs"
+    assert SourceOut.from_stored(doc_pdf).youtube_url is None
+
+    # Verify URL is never stored in Firestore documents
+    for s_id in (src_v1, src_v2, src_v3, src_pdf):
+        stored = db.document(f"notebooks/{nb_id}/sources/{s_id}").get().to_dict()
+        assert "youtube_url" not in stored
+
+
+def test_openapi_schema_source_fields():
+    """OpenAPI schema lists licence, attribution and youtube_url allowing string or null."""
+    res = client.get("/openapi.json")
+    assert res.status_code == 200
+    schema = res.json()
+    schemas = schema["components"]["schemas"]
+    source_schema = schemas.get("SourceOut") or schemas.get("Source")
+    assert source_schema is not None, "Source schema not found in components"
+    props = source_schema["properties"]
+
+    for field in ("licence", "attribution", "youtube_url"):
+        assert field in props, f"{field} missing from OpenAPI schema properties"
+        prop = props[field]
+        types = set()
+        if "anyOf" in prop:
+            for item in prop["anyOf"]:
+                if "type" in item:
+                    types.add(item["type"])
+        if "type" in prop:
+            types.add(prop["type"])
+        if prop.get("nullable"):
+            types.add("null")
+
+        assert "string" in types, f"{field} does not allow string: {prop}"
+        assert "null" in types, f"{field} does not allow null: {prop}"

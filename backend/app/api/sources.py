@@ -101,7 +101,7 @@ def create(
             page_count=page_count,
             chunk_count=len(chunks),
         )
-        return SourceOut.model_validate(source_doc)
+        return SourceOut.from_stored(source_doc)
 
     except Exception as exc:
         if isinstance(exc, ValueError):
@@ -114,7 +114,7 @@ def create(
             stage=current_stage,
             error_message=error_msg,
         )
-        return SourceOut.model_validate(failed_doc)
+        return SourceOut.from_stored(failed_doc)
 
 
 # Named list_sources so the builtin list isn't shadowed; name="list" keeps the operation ID sources_list (DECISIONS 2026-10-04).  # noqa: E501
@@ -143,7 +143,7 @@ def list_sources(
     raw = list_sources_snapshots(nb=nb, limit=limit, cursor_snapshot=cursor_snapshot)
     has_more = len(raw) > limit
     items = [
-        SourceOut.model_validate({"id": doc.id, **(doc.to_dict() or {})})
+        SourceOut.from_stored(doc)
         for doc in raw[:limit]
     ]
     next_cursor = raw[limit - 1].id if has_more else None
@@ -171,7 +171,7 @@ def get(
             detail={"code": "not_found", "message": "Source not found"},
         )
 
-    return SourceOut.model_validate({"id": doc.id, **(doc.to_dict() or {})})
+    return SourceOut.from_stored(doc)
 
 
 @router.get("/notebooks/{nb}/sources/{src}/file", name="get_file")
