@@ -9,10 +9,10 @@
 | Backend runtime | Python 3.12, uv (pyproject + lockfile) | |
 | Web framework | FastAPI, Uvicorn, Pydantic v2, pydantic-settings, python-multipart | Settings come from environment variables / `.env` |
 | Firebase | firebase-admin | Token checks, Firestore (including vector search), Storage |
-| Gemini | google-genai | Model name from `GEMINI_MODEL`; all calls go through `backend/app/llm/` |
-| Retries | tenacity | Inside the Gemini wrapper, which also handles caching and 429s |
+| Gemini | google-genai | Models from `GEMINI_MODEL` and `GEMINI_FALLBACK_MODELS` (the model chain); all calls go through `backend/app/llm/` |
+| Retries | tenacity | Inside the Gemini wrapper, which also handles the cache, the model chain and the 150 s deadline |
 | PDF | PyMuPDF 1.28 (`import pymupdf`) | Text, blocks with bboxes, drawings, images, page rendering |
-| PPTX / DOCX → PDF | LibreOffice headless | Installed on the laptop and in the backend Docker image |
+| PPTX / DOCX → PDF | LibreOffice headless | Installed on the laptop; in the backend image only if PPTX/DOCX upload is built |
 | Embeddings | fastembed, model `BAAI/bge-small-en-v1.5` | 384 dimensions, ONNX (no PyTorch). Same model for indexing and queries |
 | Transcription | faster-whisper | Laptop only, in the `laptop` dependency group; not in the Docker image |
 | Keyframes | ffmpeg scene filter | Laptop only |
@@ -26,9 +26,7 @@
 | API types | openapi-typescript | Generated from the backend's `/openapi.json` |
 | PDF viewer | react-pdf (pdf.js) | Side panel; opens a page and highlights a bbox |
 | Answers | react-markdown + remark-math + rehype-katex | Probability needs real maths rendering |
-| Tree panel | react-arborist | Drag, drop, rename, nest |
-| Roadmap | @xyflow/react (React Flow) + dagre | |
-| Evaluation | RAGAS, Gemini Flash as judge | Confirm in S9; lives in `eval/` with its own dependencies |
+| Evaluation | RAGAS, or Claude Code as the judge | S9 decides; lives in `eval/` with its own dependencies |
 
 ## Repository layout
 
@@ -38,17 +36,15 @@
 │   ├── app/
 │   │   ├── main.py, config.py, auth.py, storage.py, embeddings.py
 │   │   ├── models/       Pydantic schemas = the API contract
-│   │   ├── api/          one router per area: me, notebooks, sources, ask, workspace,
-│   │   │                 chats, quizzes, coach, notes, jobs
+│   │   ├── api/          one router per area: me, notebooks, sources, ask, topics,
+│   │   │                 chats, quizzes, coach
 │   │   ├── db/           Firestore client + path helpers (the only place paths are built)
 │   │   ├── llm/          Gemini wrapper, cache, prompts/
-│   │   ├── ingestion/    normalise, pdf, video, figures, knowledge, tagging, topics, pipeline
+│   │   ├── ingestion/    normalise, pdf, slides, video, figures, tagging, topics, pipeline
 │   │   ├── retrieval/    search, rerank, context assembly
 │   │   ├── chat/         answer generation, citation mapping
 │   │   ├── questions/    generation and verifiers
-│   │   ├── coach/        SEALED: __init__.py exposes the eight calls; bkt.py is pure maths
-│   │   ├── notes/
-│   │   └── jobs/         queue and runner
+│   │   └── coach/        SEALED: __init__.py exposes the eight calls; bkt.py is pure maths
 │   ├── scripts/          ingest_course.py, fetch_course.py, simulate_students.py
 │   ├── tests/
 │   ├── pyproject.toml, uv.lock, Dockerfile
@@ -85,7 +81,7 @@ Laptop prerequisites: Docker Desktop, Node.js LTS, uv (it installs Python 3.12 f
 
 **One-command run (judges):** `docker compose up` starts the emulators, backend and frontend together. Only a Gemini API key is needed.
 
-**Hosted demo:** backend on Cloud Run, frontend on Vercel, real Firebase project. The backend image contains LibreOffice but not faster-whisper or ffmpeg, because video is ingested only on the laptop.
+**Hosted demo:** frontend on Vercel; Firebase Auth and Firestore on the real project (Spark plan); the backend host and file storage are decided in S11, because Cloud Run and Firebase Storage need billing, which is unavailable. The backend image contains neither faster-whisper nor ffmpeg, because video is ingested only on the laptop.
 
 ## Environment variables
 
@@ -94,17 +90,16 @@ Names only; `.env.example` is the authoritative list and never holds values.
 | Variable | Used by | Purpose |
 | --- | --- | --- |
 | `GEMINI_API_KEY` | backend, eval | Gemini access |
-| `GEMINI_MODEL` | backend, eval | Exact Gemini Flash model name |
+| `GEMINI_MODEL` | backend, eval | The first model in the chain |
 | `GEMINI_FALLBACK_MODELS` | backend, eval | Comma-separated models tried in order after GEMINI_MODEL when it returns 429 or stays unavailable after retries; each free-tier model has its own daily quota |
 | `FIREBASE_PROJECT_ID` | backend | Project ID |
 | `FIREBASE_STORAGE_BUCKET` | backend | Storage bucket |
 | `GOOGLE_APPLICATION_CREDENTIALS` | backend (laptop scripts against the real project) | Path to a service-account key file kept outside the repo |
 | `FIRESTORE_EMULATOR_HOST`, `FIREBASE_AUTH_EMULATOR_HOST`, `STORAGE_EMULATOR_HOST` | backend | Set only for local runs; point the Admin SDK at the emulators |
 | `COURSE_DATA_DIR` | backend scripts | The course folder, outside the repo |
-| `JOBS_RUNNER_SECRET` | backend | Protects `/internal/jobs/run` |
 | `CORS_ORIGINS` | backend | Allowed frontend origins |
 | `NEXT_PUBLIC_API_BASE_URL` | frontend | Backend URL |
 | `NEXT_PUBLIC_FIREBASE_API_KEY`, `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`, `NEXT_PUBLIC_FIREBASE_PROJECT_ID`, `NEXT_PUBLIC_FIREBASE_APP_ID` | frontend | Firebase web config (identifies the project; not a secret) |
 | `NEXT_PUBLIC_USE_EMULATORS` | frontend | `true` locally, so sign-in uses the Auth emulator |
 
-Local values: `FIREBASE_PROJECT_ID=demo-study-companion`; emulator hosts use `127.0.0.1`, not `localhost` (Windows can resolve localhost to IPv6 first); `STORAGE_EMULATOR_HOST` includes the scheme (`http://127.0.0.1:9199`), the other two are host:port; `GOOGLE_APPLICATION_CREDENTIALS` is left out of the local `.env` entirely, because a blank value can break Google's auth libraries. Values containing spaces (such as `COURSE_DATA_DIR`) are wrapped in single quotes, because uv's .env parser rejects unquoted spaces and then skips the whole file. `GEMINI_MODEL=gemini-3.8-flash`. Real project values (`study-companion-d049d`) are used only in Cloud Run, Vercel and laptop scripts.
+Local values: `FIREBASE_PROJECT_ID=demo-study-companion`; emulator hosts use `127.0.0.1`, not `localhost` (Windows can resolve localhost to IPv6 first); `STORAGE_EMULATOR_HOST` includes the scheme (`http://127.0.0.1:9199`), the other two are host:port; `GOOGLE_APPLICATION_CREDENTIALS` is left out of the local `.env` entirely, because a blank value can break Google's auth libraries. Values containing spaces (such as `COURSE_DATA_DIR`) are wrapped in single quotes, because uv's .env parser rejects unquoted spaces and then skips the whole file. `GEMINI_MODEL=gemini-3.8-flash`, `GEMINI_FALLBACK_MODELS=gemini-3.5-flash,gemini-3.1-flash-lite`. Real project values (`study-companion-d049d`) are used only on the hosted backend, Vercel and laptop scripts.

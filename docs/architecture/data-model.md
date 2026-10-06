@@ -4,8 +4,8 @@
 
 ## Shared content, private state
 
-- **Notebook content** (sources, chunks, knowledge items, topics, questions, notes files) belongs to the notebook. Only the notebook's owner, through ingestion and jobs, writes it.
-- **Learner state** (tree layout, names, checkboxes, chats, quizzes, attempts, mastery) lives under `notebooks/{nb}/members/{uid}`, one subtree per user.
+- **Notebook content** (sources, chunks, topics, questions) belongs to the notebook. Only the notebook's owner, through ingestion and jobs, writes it.
+- **Learner state** (checkboxes, chats, quizzes, attempts, mastery) lives under `notebooks/{nb}/members/{uid}`, one subtree per user.
 - A notebook with `is_demo: true` can be read by every signed-in user. Each user still gets their own `members/{uid}` subtree, so judges never see or overwrite each other's chats or mastery, and nothing has to be copied.
 
 ## IDs
@@ -14,11 +14,9 @@
 | --- | --- |
 | Users | Firebase Auth UID |
 | Demo notebook | `nb_demo_6041` (fixed) |
-| Other notebooks, sources, questions, chats, messages, quizzes, attempts, notes files, folders, jobs | Firestore auto-IDs |
+| Other notebooks, sources, questions, chats, messages, quizzes, attempts | Firestore auto-IDs |
 | Chunks | `{source_id}-{seq:05d}` (deterministic) |
-| Knowledge items | `{source_id}-k{seq:05d}` (deterministic) |
-| Topics | Generated once and never regenerated; the "Other material" topic is `other`. The demo course's topic IDs are seeded deterministically from syllabus.md (S4) |
-| Tree nodes | Topic nodes use the topic ID, chat nodes the chat ID, notes nodes the notes-file ID, user folders an auto-ID |
+| Topics | The six syllabus topics, with IDs seeded deterministically from syllabus.md (S4); the "Other material" topic is `other`. Never regenerated |
 
 ## Collections: shared content
 
@@ -26,20 +24,17 @@
 | --- | --- |
 | `users/{uid}` | email, display_name, is_guest, study_coach (true / false / null = not asked yet), format {custom_instructions}, created_at |
 | `notebooks/{nb}` | name, owner_uid, is_demo, status (empty / processing / ready), sources_summary [{source_id, ref_n, title, kind, status}] (stored twice so the notebook page loads in one read), counts {chunks, items, questions_verified}, created_at |
-| `notebooks/{nb}/sources/{src}` | ref_n (the n in `@n`), title, kind (pdf / slides_pdf / pptx / docx / video / markdown; later html / xlsx / web), role (content / syllabus), filename, storage_path, viewer_path (the PDF the viewer opens: the original for PDFs, the converted file for PPTX/DOCX), youtube_id, offset_s, duration_s, page_count, page_labels [str or null, one per page], slide_grid ("2x2" etc. or null), licence_pages [page numbers], licence, attribution, status (queued / processing / ready / failed), stage, error, ingest_version, created_at |
-| `notebooks/{nb}/topics/{topic}` | name, parent_id (null for top level), level (topic / subtopic), order, prerequisite_ids [] (a subtopic with none inherits its parent's), summary, is_other, locations [Location] (the Sources button; stored twice), item_count |
+| `notebooks/{nb}/sources/{src}` | ref_n (the n in `@n`), title, kind (pdf / slides_pdf / pptx / docx / video / markdown), role (content / syllabus), filename, storage_path, viewer_path (the PDF the viewer opens: the original for PDFs, the converted file for PPTX/DOCX), youtube_id, offset_s, duration_s, page_count, page_labels [str or null, one per page], slide_grid ("2x2" etc. or null), licence_pages [page numbers], licence, attribution, status (processing / ready / failed), stage, error, ingest_version, created_at |
+| `notebooks/{nb}/topics/{topic}` | name, order, prerequisite_ids [], summary, is_other, locations [Location] (the Sources button; stored twice), location_count |
 | `notebooks/{nb}/chunks/{chunk}` | source_id, kind (text / transcript / figure / keyframe), text (for figures and keyframes, the vision description), loc (Location), topic_id, embedding (vector, 384 dimensions), token_count, image_path |
-| `notebooks/{nb}/knowledge_items/{item}` | type (definition / formula / theorem / worked_example / figure / fact / edge_case), title, text (Markdown + LaTeX), topic_id, chunk_ids [], loc |
 | `notebooks/{nb}/questions/{q}` | type (mcq / short / numerical), topic_id, difficulty (1–3), stem, options [{id, text, misconception or null}], answer ({option_id} or {value: "3/8"} or {model_answer}), rubric [{point, chunk_id}], explanation, citations [Citation], verification {method, passed, detail}, status (verified / rejected), batch_id, created_at |
-| `notebooks/{nb}/notes_files/{f}` | kind (complete / revision), default_name ("YYYY-MM-DD HH-MM"), from_file_id, created_by, status, sources_used [], coverage {covered, total}, source_fingerprint (hash of source IDs and versions; drives the "nothing changed" warning), created_at |
-| `notebooks/{nb}/notes_files/{f}/sections/{topic_id}` | order, markdown, citations [Citation], status. One document per section, so sections fill in progressively and no file reaches Firestore's 1 MB document limit |
 
 ## Collections: private learner state
 
 | Path | Fields |
 | --- | --- |
-| `notebooks/{nb}/members/{uid}` | tree {node_id: {kind (topic / folder / chat / notes), name, parent_id, order, checked}}, seen_question_ids [], diagnostic {status (not_started / in_progress / skipped / done), quiz_id}, created_at. Created on first open from the topics; topics added later are merged in when it is read |
-| `.../members/{uid}/chats/{chat}` | name, folder_node_id, created_at, updated_at |
+| `notebooks/{nb}/members/{uid}` | checked {topic_id: true}, seen_question_ids [], diagnostic {status (not_started / in_progress / skipped / done), quiz_id}, created_at. Created on first open |
+| `.../members/{uid}/chats/{chat}` | name, topic_id (null for the whole notebook), created_at, updated_at |
 | `.../chats/{chat}/messages/{msg}` | A Message (below). Stores retrieved chunk IDs and scores, not chunk text |
 | `.../members/{uid}/quizzes/{quiz}` | mode (adaptive / chosen / diagnostic), topic_ids, question_ids, position, status, score, report, created_at |
 | `.../members/{uid}/attempts/{a}` | question_id, quiz_id, topic_id, type, answer, correct, score (0–1), time_ms, created_at |
@@ -50,8 +45,7 @@
 
 | Path | Fields |
 | --- | --- |
-| `jobs/{job}` | type (ingest_source / build_questions / generate_notes), notebook_id, target_id, status (queued / running / waiting_quota / done / failed), attempts, next_run_at, lease_until, progress {done, total}, error, created_by, created_at |
-| `llm_cache/{sha256}` | model, prompt_version, output, created_at. Key = sha256 of the model, the prompt version, a hash of the full prompt and the caller's cache-key parts, joined by `\x1f`. Written only after a valid response; a hit writes nothing. Laptop scripts also mirror the cache to `backend/.cache/` (git-ignored) |
+| `llm_cache/{sha256}` | model, prompt_version, output, created_at. Key = sha256 of the model, the prompt version, a hash of the full prompt and the caller's cache-key parts, joined by `\x1f`. Written only after a valid response; a hit writes nothing. Laptop scripts also mirror the cache to `backend/.cache/` (git-ignored). The stored model is the model that answered (L1). |
 
 ## Shared types
 
@@ -96,9 +90,7 @@ Message {
   id, role (user | assistant), created_at
   text?                      user messages
   paragraphs?                assistant messages
-  refs {sources: [source_id], files: [node_id]}
-  reply_to? {message_id, quote}
-  pasted_images: [storage path]
+  refs {sources: [source_id]}
   context?: [{chunk_id, text, loc, score}]    returned by the API; stored as IDs and scores only
 }
 ```
@@ -114,7 +106,6 @@ The backend builds `open`; the frontend never builds a link. A YouTube `url` is 
 | Recitation | `R03 solutions, p. 2` |
 | Video | `L03 lecture, 12:34` |
 | Converted PPTX | `<title>, slide 4` |
-| Pasted image | `provided by you` |
 
 Licence and terms pages are never cited.
 
@@ -125,15 +116,15 @@ notebooks/{nb}/sources/{src}/original.{ext}
 notebooks/{nb}/sources/{src}/viewer.pdf          PPTX and DOCX conversions
 notebooks/{nb}/sources/{src}/figures/{chunk_id}.png
 notebooks/{nb}/sources/{src}/keyframes/{chunk_id}.jpg
-users/{uid}/pasted/{id}.png
 ```
+
+Locally these live in the Storage emulator; the hosted storage is decided in S11, and only `backend/app/storage.py` touches it.
 
 Videos are never stored. Laptop-only derived files (transcripts, keyframes before upload) go in `$COURSE_DATA_DIR/derived/`, outside the repo.
 
 ## Indexes (`infra/firestore.indexes.json`)
 
 - Vector index on collection group `chunks`, field `embedding`, 384 dimensions, cosine distance.
-- `jobs`: status ascending, next_run_at ascending.
 - `questions`: topic_id, status, difficulty.
 - `notebooks`: owner_uid ascending, created_at descending.
 

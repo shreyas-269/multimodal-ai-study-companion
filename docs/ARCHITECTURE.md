@@ -1,6 +1,6 @@
 # Architecture
 
-**Status: v1.1 (5 Oct 2026, S3 lane A: C1–C3 built).** The data model, API contract, libraries and repo layout are final. Change them only through a new line in DECISIONS.md.
+**Status: v1.2 (7 Oct 2026, after the Replan).** Checkpoint 1 passed on 6 Oct. The data model, API contract, libraries and repo layout change only through a new line in DECISIONS.md.
 
 ## How these docs are organised
 
@@ -19,22 +19,32 @@ Each fact lives in exactly one file. This file summarises and links; it never re
 
 A source-grounded AI study companion. Students upload lecture videos, textbooks, slides and notes; the app turns them into a source-cited knowledge base, tutors from it with exact citations, quizzes the student with verified questions, and (if they opt in to Study Coach) tracks per-topic mastery.
 
-**Out of scope:** Hindi or mixed-language support, audio tutoring.
+**Out of scope:** Hindi or mixed-language support, audio tutoring, and everything cut on 6 Oct (see "Scope after the Replan").
+
+## Scope after the Replan (6 Oct)
+
+The Replan on 6 Oct moved the dates and cut scope; each decision is a 6 Oct line in DECISIONS.md.
+
+- **Dates:** checkpoint 2 (video ingestion + verified quizzes) Sat 10 Oct; feature freeze Sun 11 Oct evening; checkpoint 3 (first evaluation scores) Mon 12 Oct; submission Wed 14 Oct evening.
+- **Protected:** grounded citations (page, slide, timestamp), video ingestion, verified quizzes (MCQ and numerical), Study Coach core (BKT, needs-work, progress), evaluation scores, the hosted demo.
+- **Should, in order, only while on schedule:** keyframe and figure descriptions, slide bbox highlight, PPTX/DOCX upload conversion, short-answer questions, the diagnostic quiz, the prerequisite rerank boost, simulated students, a small quiz on a user's own upload.
+- **Cut:** the job queue, subtopics and knowledge items, the tree panel (folders, drag and drop, renaming), `#` references, pasted images, reply quotes, notes files, roadmap, schedule generator, Excel/HTML/website ingestion.
+- **Review depth follows risk:** see DECISIONS.md (6 Oct).
 
 ## Components
 
 | Part | Technology |
 | --- | --- |
-| Backend API | Python 3.12 + FastAPI, one container on Cloud Run |
+| Backend API | Python 3.12 + FastAPI in one container; the hosted platform is decided in S11 (Cloud Run needs billing, which is unavailable) |
 | Frontend | Next.js (TypeScript) on Vercel Hobby |
 | Login | Firebase Authentication: email/password and guest (anonymous) |
-| Database + vector search | Firestore (accessed only by the backend) |
-| File storage | Cloud Storage for Firebase (accessed only by the backend) |
-| App AI model | Gemini Flash (text + vision) through the google-genai SDK |
+| Database + vector search | Firestore (accessed only by the backend); the real project stays on the Spark plan |
+| File storage | The Storage emulator locally; hosted storage is decided in S11, behind `backend/app/storage.py` |
+| App AI model | Gemini Flash models on the free Gemini API tier, through the google-genai SDK, as a model chain: `GEMINI_MODEL` first, then `GEMINI_FALLBACK_MODELS` |
 | Transcription | faster-whisper, on the laptop only |
 | Embeddings | fastembed with BAAI/bge-small-en-v1.5 (384 dimensions), on the laptop and in the backend container |
 | Video | YouTube links with `&t=<seconds>s`; no video hosting |
-| Evaluation | RAGAS (to confirm in S9), Gemini Flash as judge |
+| Evaluation | RAGAS or Claude Code as the judge (S9 decides), a small testset, within the call budget |
 
 Full library list and versions: `architecture/stack.md`.
 
@@ -42,41 +52,43 @@ Full library list and versions: `architecture/stack.md`.
 
 - The frontend uses Firebase only to sign in. It sends the Firebase ID token to the backend on every request and never reads Firestore or Storage itself. Firestore and Storage security rules deny all client access; the backend uses the Admin SDK.
 - The frontend never talks to Gemini and contains no business logic. `frontend/lib/api.ts` is the only file that calls the backend.
-- Local development uses the Firebase Emulator Suite in Docker. The hosted demo uses the real Firebase project. Environment variables decide which one the backend talks to.
+- Local development uses the Firebase Emulator Suite in Docker. The hosted demo uses the real Firebase project study-companion-d049d on the Spark plan for Auth and Firestore; the backend host and file storage are decided in S11. Environment variables decide which one the backend talks to.
 - The demo notebook is shared: every signed-in user can read its content, and each user gets their own chats, checkboxes, quizzes and mastery (see "Shared content, private state" in `architecture/data-model.md`).
-- Locally, exactly one backend server runs, in lane A's backend tab. On Windows two uvicorn processes can both listen on port 8000 and requests then go to either one, so no agent and no other window starts a backend.
+- Locally, exactly one backend server runs. On Windows two uvicorn processes can both listen on port 8000 and requests then go to either one, so no agent starts a backend and nobody starts a second one.
 
 ## Ingestion pipeline (per source)
 
-1. Normalise: PowerPoint and Word → PDF (LibreOffice); video → timestamped transcript (faster-whisper) + keyframes at scene changes (ffmpeg); Markdown syllabus → headings. Licence and terms pages are detected by their text and excluded from retrieval and citations. Excel, HTML and websites are S10 extras.
-2. Chunk, recording each chunk's exact location (see Location in `architecture/data-model.md`). Slide handouts with several slides per page are split per slide using the `slide_grid` manifest column; other slide PDFs are one slide per page. Chunks hold at most 400 tokens, counted with the embedding model's own tokenizer (its limit is 512), and never cross a page.
-3. Read figures and diagrams with Gemini Flash vision.
-4. Extract knowledge items (definitions, formulas, theorems, worked examples, figures, facts, edge cases) and tag each chunk and item to a subtopic, in batched calls. A syllabus, if given, seeds the topic tree.
+1. Normalise: PDF as is; PowerPoint and Word → PDF with LibreOffice (a Should); video → timestamped transcript (faster-whisper) + about 10 keyframes per lecture at scene changes (ffmpeg); the Markdown syllabus → the six topics. Licence and terms pages are detected by their text and excluded from retrieval and citations.
+2. Chunk, recording each chunk's exact location (see Location in `architecture/data-model.md`). Slide handouts with several slides per page are split per slide using the `slide_grid` manifest column, and each slide chunk carries its bbox in the page's displayed (rotated) coordinates; other slide PDFs are one slide per page. Chunks hold at most 400 tokens, counted with the embedding model's own tokenizer (its limit is 512), and never cross a page.
+3. Describe keyframes (and figures, if time allows) with Gemini vision, 5 images per call.
+4. Tag every chunk to one of the six syllabus topics without Gemini: the manifest file and page range decide, and embedding similarity to the topic descriptions breaks ties where a range spans two topics. User uploads go to the "Other material" topic. There are no subtopics and no knowledge items.
 5. Embed with bge-small-en-v1.5; store chunks + vectors in Firestore.
-6. Background jobs build and verify the question bank per subtopic.
+6. The question bank is built per topic by a laptop script (S6).
 
-Every source is processed once and every model output is cached. Video ingestion runs only on the laptop (`backend/scripts/ingest_course.py`); on the hosted demo, video upload explains this instead of processing. PDF, PPTX, DOCX and Markdown uploads are processed on the hosted demo through the job queue.
+Every source is processed once and every model output is cached. The demo course, including video, is ingested only on the laptop (`backend/scripts/ingest_course.py`), which fills each source's licence, attribution, youtube_id and offset_s from manifest.csv. User uploads are processed inside the upload request, on the hosted demo too (no job queue); a video upload on the hosted demo explains that videos are ingested on the laptop only.
 
-**Checkpoint-1 state (S3):** only PDFs are accepted, up to 30 MB, and they are processed inside the upload request: text per physical page with PyMuPDF in its native reading order, page-bounded chunks with IDs `{source_id}-{seq:05d}` from 00000, embeddings from bge-small-en-v1.5, written in batches of up to 500. A failed upload returns status "failed" with a short error, deletes its partial chunks and keeps its original file for a retry. Steps 3, 4 and 6, page labels, licence-page exclusion and slide splitting arrive in S4, which also moves processing into the job queue.
+**Checkpoint-1 state (S3):** only PDFs are accepted, up to 30 MB, and they are processed inside the upload request: text per physical page with PyMuPDF in its native reading order, page-bounded chunks with IDs `{source_id}-{seq:05d}` from 00000, embeddings from bge-small-en-v1.5, written in batches of up to 500. A failed upload returns status "failed" with a short error, deletes its partial chunks and keeps its original file for a retry. Page labels, licence-page exclusion, slide splitting, topics, video and keyframes arrive in S4; the question bank in S6.
 
 ## Chat request flow
 
-1. Retrieve: one nearest-neighbour search over the notebook's chunks (top 40), then a rerank in Python that boosts the chat's folder topic and its prerequisites, plus any `#`-referenced notes file (searched, not pasted whole). A chat's folder topic is its nearest ancestor in the tree that is a real topic; with none, the whole notebook is searched equally.
-2. Send Gemini the chunks, the format template, the student's instructions and, if Study Coach is on, one line about weak prerequisites.
+1. Retrieve: one nearest-neighbour search over the notebook's chunks (top 40), then a rerank in Python that boosts the chat's topic and its prerequisites. With no topic, the whole notebook is searched equally.
+2. Send Gemini the chunks, the format template, the student's custom instructions and, if Study Coach is on, one line about weak prerequisites.
 3. Gemini returns paragraphs, each citing the chunks it came from. A paragraph with no citation is marked `outside_course` and shown in the "Beyond your course" box.
 4. `POST /v1/notebooks/{nb}/ask` returns the paragraphs **and** the retrieved context; the evaluation harness calls it. Chat messages run the same function, then save the message and record a chat signal for the learner model.
 
-**Checkpoint-1 state (S3):** `/ask` embeds the question with BGE's query instruction, takes the top 40 chunks by cosine distance, drops chunks of sources that aren't ready, and sends the top 10 without reranking; S5 adds the rerank, the topic and prerequisite boost, `#` references and the format template. The chunks go to Gemini as numbered `<<<SOURCE n>>>` blocks with the question last; Gemini cites numbers, which the backend maps to chunk IDs, dropping unknown numbers and chunks without a page. With `allow_outside` false (the default), a question the sources don't answer gets one uncited "not covered" paragraph. All Gemini calls go through `backend/app/llm/`: JSON output against a Pydantic schema, retries only on 5xx, timeouts and connection errors (at most 3 attempts or 100 s), 429 → `quota_exhausted` (never retried), persistent failure → 503 `unavailable`, and an `llm_cache` key that includes a hash of the full prompt.
+**Checkpoint-1 state (S3):** `/ask` embeds the question with BGE's query instruction, takes the top 40 chunks by cosine distance, drops chunks of sources that aren't ready, and sends the top 10 without reranking; S5 adds the rerank, the topic and prerequisite boost, the format template and the custom instructions. The chunks go to Gemini as numbered `<<<SOURCE n>>>` blocks with the question last; Gemini cites numbers, which the backend maps to chunk IDs, dropping unknown numbers and chunks without a page. With `allow_outside` false (the default), a question the sources don't answer gets one uncited "not covered" paragraph.
 
-## Background jobs
+**Model chain (L1):** all Gemini calls go through `backend/app/llm/`, with JSON output against a Pydantic schema. The cache is checked under every model in the chain (`GEMINI_MODEL`, then `GEMINI_FALLBACK_MODELS`) before any call. Each model gets up to 3 attempts on 5xx errors, timeouts and connection errors; a 429 moves to the next model at once and, with 2 or more models, skips that model until its retry time; any other 4xx stops the chain (a logged 500). One 150 s deadline per request caps every attempt's HTTP timeout. The first success is cached under the answering model's key, and `/ask` reports that model. If every model is out of quota, the answer is 429 `quota_exhausted`; otherwise 503 `unavailable`.
 
-Long work (source ingestion on the hosted demo, question bank building, complete notes) is a document in the `jobs` collection. One runner function claims due jobs, runs them with retries and backoff, and resumes partly finished work instead of restarting. A Gemini 429 response puts a job in `waiting_quota` with a later `next_run_at`. On the laptop the runner is a script; on Cloud Run it is the endpoint `POST /internal/jobs/run`, called by a scheduler (set up in S11). Clients poll status every 2–3 seconds.
+## Long-running work (no job queue)
+
+There is no job queue in v1 (cut on 6 Oct). Uploads are processed inside the request, which takes up to about 2 minutes for a textbook. Long work runs as laptop scripts that are safe to re-run: the demo-course ingestion (`backend/scripts/ingest_course.py`, including transcription and keyframes), the question-bank build (S6) and the evaluation run (S9). Deterministic chunk IDs and the LLM cache make a re-run resume instead of repeating work or spending quota. The `jobs` collection, `GET /v1/jobs/{job}` and `POST /internal/jobs/run` are not built.
 
 ## Design rules
 
-- **Stable IDs** for every topic, chat and notes file; names and positions are display labels only. Chunk and knowledge-item IDs are deterministic (`{source_id}-{seq}`), so re-running ingestion overwrites instead of duplicating.
-- **Moving or renaming in the tree never changes content.** A topic's prerequisites and tags stay the same wherever the student puts it.
-- **Citations point to original sources**, never to generated notes. Citations through a `#` notes file pass through to the original sources.
+- **Stable IDs** for every topic and chat; names are display labels only. Chunk IDs are deterministic (`{source_id}-{seq:05d}`), so re-running ingestion overwrites instead of duplicating.
+- **Topics are fixed:** the six syllabus topics plus "Other material", with fixed IDs and prerequisites seeded from syllabus.md.
+- **Citations point to original sources.** Every citation, from `/ask`, chat or the Sources button, is built by the same function, so labels and links are identical everywhere.
 - **The Pydantic models in `backend/app/models/` are the API contract.** Frontend TypeScript types are generated from the backend's OpenAPI schema, never written by hand.
 - **Question bank, verified on entry:** numericals checked by running Python (`fractions.Fraction` for exact answers), MCQs by a blind second-model answer, short answers by a source-linked rubric. A seen-questions record per student prevents repeats.
 - **Study Coach is a sealed module** behind eight calls: `record_quiz_answer`, `record_chat_signal`, `record_checkbox`, `get_topics_needing_work`, `pick_quiz_questions`, `build_report`, `start_diagnostic`, `get_progress`. When Study Coach is off, the record calls do nothing and `get_topics_needing_work` falls back to unchecked checkboxes. The module takes a storage interface (Firestore in the app, in-memory for simulated students), and the BKT maths is pure functions.
@@ -90,11 +102,12 @@ Long work (source ingestion on the hosted demo, question bank building, complete
 
 1. Process every source once; cache every model output.
 2. Transcription and embeddings run locally and never use API requests.
-3. Batch generation: one request generates several questions or items.
-4. Background jobs run through the rate-limit-aware queue that retries and resumes instead of restarting.
+3. Batch generation: one request generates several questions or describes several images.
+4. Long work runs as re-runnable laptop scripts that resume from deterministic IDs and the cache instead of restarting.
 5. Simulated students never call the AI; they answer in code from the existing question bank, using the Study Coach with in-memory storage.
 6. Never put Gemini calls or Firestore reads inside unbounded loops.
-7. Builds and test runs never call the real Gemini API; every live check states its call budget (usually 1 to 3 calls).
+7. Builds and test runs never call the real Gemini API; every live check states its call budget (usually 1 to 3 calls), and each workload stays within the call budgets in DECISIONS.md (6 Oct).
+8. The free tier's per-model daily quota is the real budget: every call goes through the model chain, and bulk scripts may put the lighter models first with `models=`.
 
 ## Acceptance criteria
 
@@ -105,6 +118,29 @@ Written by Shreyas before each feature is built (3–5 observable checks each). 
 - Upload `L02-slides.pdf`, ask "what is Bayes' rule?": the answer cites a source.
 - Select a paragraph, click **Source**: the PDF opens on the exact page, and that page actually states Bayes' rule.
 - Ask "what's the capital of France?": the answer is declined or sits entirely in the "Beyond your course" box.
+
+### Checkpoint 1 (passed 6 Oct)
+
+- Create a notebook; it's listed after reload; a guest in incognito can't see it, and its URL shows "Notebook not found."
+- textbook.pdf reaches ready in under 2 minutes; chunks have pages and embeddings; a .docx gets a clear "only PDF for now" message; the emulator vector test passes.
+- "What is conditional probability?" returns a cited paragraph whose citation opens the PDF at a page that discusses it.
+- "What's the capital of France?" returns no cited paragraph.
+- The /ask response contains context with chunk text, page and score; asking twice writes nothing except llm_cache.
+
+### Model chain (L1, passed 7 Oct)
+
+- With `GEMINI_FALLBACK_MODELS` unset, behaviour is identical to before (the existing tests pass unchanged).
+- A 429 from the first model makes the next model answer, and `/ask` reports that model.
+- No request runs past 150 s, whatever the models do (fake-clock simulation).
+- A repeated question is served from the cache in under 1 s with no Gemini call.
+
+### Checkpoint 2 (target Sat 10 Oct)
+
+- The demo notebook lists every source in manifest.csv as ready, each card showing its licence and attribution.
+- A question about an example shown in a lecture cites the video; its YouTube link opens within 10 s of where the example starts.
+- A slide citation opens the right page of the slide handout, with the cited slide highlighted.
+- The Sources button on a topic lists citations from at least two kinds of source (textbook, slides, recitation, video).
+- A quiz on one topic contains MCQ and numerical questions that all passed verification; a wrong answer gets feedback with a citation.
 
 ## Frontend (checkpoint-1 state)
 
