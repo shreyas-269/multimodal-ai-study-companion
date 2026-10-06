@@ -327,3 +327,28 @@ Template for each feature:
 - *Did the redesign risk breaking anything?* It changed markup and styles only. Every request, error message and timeout stayed the same, and a separate check compared the code before and after to confirm it.
 
 - *What went wrong while building it?* Nothing broke, but moving the citation button into its own component left an unused callback behind in the notebook page. Before deleting it, the re-verification read the previous commit's code to prove the callback only opened the PDF. The narrow-screen "scroll down to the viewer" lives in an effect that watches the viewer's navigation counter, so it still fires for every citation, wherever the button is.
+
+---
+
+## FX2 · Demo polish
+
+**What it does:** The app now introduces itself. The login page shows the name, Groundwork, with a one-line tagline ("Study from your own course material, with every answer cited to the page, slide or moment it came from.") and a hint under the guest button that no account is needed to try the demo. Every tab has a proper title ("Notebooks · Groundwork") and a black-and-white icon. A mistyped address shows a "Page not found" card with a way back, and an unexpected crash shows a "Something went wrong" card with "Try again" instead of a blank page. A brand-new account's notebook list says what to do next instead of looking empty.
+
+**Data flow:** no requests changed. `lib/site.ts` holds the name, tagline and guest hint as constants → `app/layout.tsx` sets the default title, the title template `%s · Groundwork` and the description → metadata-only `layout.tsx` files in `login/`, `notebooks/`, `notebooks/[id]/` and `settings/` fill in each page's title (server files that only return their children, because the pages are client components and can't export metadata) → `app/not-found.tsx` handles any unknown address with a real 404 → `app/error.tsx` catches render errors below the root layout, logs them to the console and offers a retry → `/notebooks` shows its empty state when the first page holds no notebook of your own and there's no next page, using data the list already loaded.
+
+**Main files:**
+- `frontend/lib/site.ts`: the name, tagline and guest hint, in one place.
+- `frontend/app/layout.tsx`: the title template and description.
+- `frontend/app/login/layout.tsx`, `notebooks/layout.tsx`, `notebooks/[id]/layout.tsx`, `settings/layout.tsx`: tab titles.
+- `frontend/app/login/page.tsx`: the heading, tagline and guest hint.
+- `frontend/app/not-found.tsx` and `frontend/app/error.tsx`: the 404 and crash screens.
+- `frontend/app/notebooks/page.tsx`: the empty state.
+- `frontend/app/icon.svg`: the tab icon (replacing the default favicon).
+
+**A judge might ask… / my answer:**
+- *Why does the error page hide the error message?* Error messages can contain internals: file paths, database details, sometimes parts of URLs. The student gets a plain message and a "Try again" button, and the full error goes to the browser console for debugging.
+- *Why one file for the product name?* The name appears on the login page, in every tab title and in the description. Keeping it in one constant means a rename is one edit and the app can never disagree with itself.
+- *Why tiny layout files just for titles?* The pages are client components, because they use sign-in state and live data, and Next.js only reads page metadata from server files. A metadata-only layout gives each page a real title without moving any data fetching to the server.
+- *Why doesn't the tab show the notebook's name?* That would mean setting the title from the browser after the data loads, which can fight Next.js's own title handling. A plain "Notebook" title can't break, and the name is right there on the page.
+- *Why tell guests their data is lost on sign-out?* A guest is a real but anonymous account; once you sign out there's no way back into it. Saying so up front is better than a judge losing their quiz progress by surprise.
+- *Why a black square for the icon?* A black outline disappears on a dark tab bar; a black square with a white mark is visible on both light and dark ones, and keeps the app monochrome.
