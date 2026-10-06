@@ -4,6 +4,8 @@ import { useState, useRef, useEffect } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/components/auth-provider";
+import { useViewer } from "@/components/viewer-context";
+import { bboxToCssRect } from "@/lib/pdf-highlight";
 import { getSourceFileRequest } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,9 +37,21 @@ export function PdfViewer({
   onClose,
 }: PdfViewerProps) {
   const { user } = useAuth();
+  const { highlight, viewerSource } = useViewer();
+  const navKey = viewerSource?.navKey ?? 0;
+
   const containerRef = useRef<HTMLDivElement>(null);
+  const highlightRef = useRef<HTMLDivElement>(null);
+  const lastScrolledNavKeyRef = useRef<number | null>(null);
+
   const [containerWidth, setContainerWidth] = useState<number>(0);
   const [numPages, setNumPages] = useState<number | null>(null);
+  const [pageSize, setPageSize] = useState<{
+    pageNumber: number;
+    width: number;
+    height: number;
+  } | null>(null);
+  const [renderedPageNumber, setRenderedPageNumber] = useState<number | null>(null);
   const [hasRenderError, setHasRenderError] = useState(false);
   const [submitCount, setSubmitCount] = useState<number>(0);
 
@@ -66,6 +80,31 @@ export function PdfViewer({
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
+
+  const renderedWidth = Math.floor(containerWidth);
+  const isCurrentPageMeasured = pageSize != null && pageSize.pageNumber === page;
+  const isCurrentPageHighlighted = highlight != null && highlight.page === page;
+
+  const rect =
+    isCurrentPageHighlighted && isCurrentPageMeasured && renderedWidth > 0
+      ? bboxToCssRect(highlight.bbox, pageSize.width, pageSize.height, renderedWidth, 3)
+      : null;
+
+  useEffect(() => {
+    if (
+      renderedPageNumber === page &&
+      highlight &&
+      highlight.page === page &&
+      rect &&
+      highlightRef.current &&
+      typeof window !== "undefined" &&
+      window.matchMedia("(min-width: 1024px)").matches &&
+      lastScrolledNavKeyRef.current !== navKey
+    ) {
+      lastScrolledNavKeyRef.current = navKey;
+      highlightRef.current.scrollIntoView({ block: "nearest", inline: "nearest" });
+    }
+  }, [renderedPageNumber, page, highlight, rect, navKey]);
 
   const handleError = () => {
     setHasRenderError(true);
@@ -175,11 +214,36 @@ export function PdfViewer({
           >
             <Page
               pageNumber={page}
-              width={Math.floor(containerWidth)}
+              width={renderedWidth}
               renderTextLayer={true}
               renderAnnotationLayer={true}
+              onLoadSuccess={(pdfPage) => {
+                const vp = pdfPage.getViewport({ scale: 1 });
+                setPageSize({
+                  pageNumber: pdfPage.pageNumber,
+                  width: vp.width,
+                  height: vp.height,
+                });
+              }}
+              onRenderSuccess={() => {
+                setRenderedPageNumber(page);
+              }}
               onRenderError={handleError}
-            />
+            >
+              {rect && (
+                <div
+                  ref={highlightRef}
+                  aria-hidden="true"
+                  className="pointer-events-none absolute z-10 rounded-sm border-2 border-black bg-black/5 shadow-[0_0_0_2px_white]"
+                  style={{
+                    left: rect.left,
+                    top: rect.top,
+                    width: rect.width,
+                    height: rect.height,
+                  }}
+                />
+              )}
+            </Page>
           </Document>
         )}
       </div>

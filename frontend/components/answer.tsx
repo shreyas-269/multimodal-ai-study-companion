@@ -4,8 +4,8 @@ import ReactMarkdown from "react-markdown";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
-import { Button, buttonVariants } from "@/components/ui/button";
-import type { AskResponse, CitationItem } from "@/lib/api";
+import { CitationChip } from "@/components/citation-chip";
+import type { AskResponse } from "@/lib/api";
 
 /**
  * Converts LaTeX delimiters outside code blocks from \( ... \) to $...$
@@ -27,48 +27,11 @@ export function normalizeMathDelimiters(text: string): string {
 interface AnswerViewProps {
   response: AskResponse;
   sourceMap: Map<string, string>;
-  onOpenPdf: (sourceId: string, title: string, page: number) => void;
 }
 
-export function AnswerView({ response, sourceMap, onOpenPdf }: AnswerViewProps) {
+export function AnswerView({ response, sourceMap }: AnswerViewProps) {
   const courseParagraphs = response.paragraphs.filter((p) => !p.outside_course);
   const outsideParagraphs = response.paragraphs.filter((p) => p.outside_course);
-
-  const renderCitationButton = (citation: CitationItem, index: number) => {
-    const openTarget = citation.open;
-    if (openTarget.kind === "pdf") {
-      const title = sourceMap.get(openTarget.source_id) ?? citation.label;
-      const page = openTarget.page;
-      return (
-        <Button
-          key={citation.chunk_id || `${citation.label}-${index}`}
-          variant="outline"
-          size="sm"
-          onClick={() => onOpenPdf(openTarget.source_id, title, page)}
-          className="text-xs"
-        >
-          {citation.label}
-        </Button>
-      );
-    }
-
-    if (openTarget.kind === "youtube" || "url" in openTarget) {
-      const url = "url" in openTarget ? (openTarget.url as string) : "";
-      return (
-        <a
-          key={citation.chunk_id || `${citation.label}-${index}`}
-          href={url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={buttonVariants({ variant: "outline", size: "sm" }) + " text-xs"}
-        >
-          {citation.label}
-        </a>
-      );
-    }
-
-    return null;
-  };
 
   const renderParagraph = (
     p: (typeof response.paragraphs)[number],
@@ -87,7 +50,13 @@ export function AnswerView({ response, sourceMap, onOpenPdf }: AnswerViewProps) 
         </div>
         {p.citations && p.citations.length > 0 && (
           <div className="flex flex-wrap gap-1.5 pt-1">
-            {p.citations.map((c, cIdx) => renderCitationButton(c, cIdx))}
+            {p.citations.map((c, cIdx) => (
+              <CitationChip
+                key={c.chunk_id || `${c.label}-${cIdx}`}
+                citation={c}
+                title={c.open.kind === "pdf" ? sourceMap.get(c.open.source_id) : undefined}
+              />
+            ))}
           </div>
         )}
       </div>

@@ -474,9 +474,6 @@ function NotebookContent() {
                         <AnswerView
                           response={item.response}
                           sourceMap={sourceMap}
-                          onOpenPdf={(sourceId, title, page) =>
-                            openSource({ sourceId, title, page })
-                          }
                         />
                       </div>
                     </div>
