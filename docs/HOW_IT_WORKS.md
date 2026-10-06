@@ -225,3 +225,25 @@ Template for each feature:
 - *Why convert maths delimiters?* The maths renderer only understands `$…$`, and language models sometimes write `\( … \)`. Converting first means formulas always render.
 - *Can an answer inject code into the page?* No. Markdown is rendered without raw HTML, and links open in a new tab with `noopener`.
 - *What went wrong while building it?* The plan review caught two bugs that would have broken the page: a button property that doesn't exist in this UI kit (the build would fail), and React hooks placed after early returns (React would crash). The verification found the shadcn command had again installed an unrelated npm package called `cn`; it was removed. The live test also hit Gemini's "high demand" outage, and the page showed "The AI model is busy" exactly as designed.
+
+---
+
+## F1a · Study Coach question and settings
+
+**What it does:** The first time anyone signs in, with email or as a guest, the notebooks page shows a short card, "Want Study Coach?". It explains what the coach tracks and offers "Yes, turn it on" or "No thanks". The choice is saved to the account and the card never comes back. A Settings page, linked from the account bar, lets you switch Study Coach on or off at any time and write custom instructions (up to 2,000 characters) for how the tutor should write its answers.
+
+**Data flow:** sign-in → the account bar and the card share one `GET /v1/me` request through the TanStack Query key `["me", uid]` → on the first call the backend creates `users/{uid}` with `study_coach: null` → the card renders only while `study_coach` is null → a click calls `usePatchMe` → `patchMe()` in `lib/api.ts` → `PATCH /v1/me {study_coach: true | false}` → the backend updates `users/{uid}` and returns the whole user → `usePatchMe` writes it into `["me", uid]`, so the card disappears and the account line changes without a reload. The Settings page sends the same PATCH for the on/off button, and `{format: {custom_instructions}}` for the instructions (trimmed; an empty box saves `null`). The backend rejects more than 2,000 characters with 422 `invalid`.
+
+**Main files:**
+- `frontend/components/study-coach-prompt.tsx`: the first-launch card.
+- `frontend/app/settings/page.tsx`: the Study Coach switch and the custom-instructions form.
+- `frontend/lib/use-patch-me.ts`: the one hook every profile change goes through; it updates the cached user.
+- `frontend/components/account-bar.tsx`: the Settings link and the "Study Coach: on / off / not asked yet" line.
+- `backend/app/api/me.py` and `backend/app/models/user.py`: `GET` and `PATCH /v1/me`, and the 2,000-character limit.
+
+**A judge might ask… / my answer:**
+- *Why ask instead of tracking everyone?* Study Coach builds a picture of how well you know each topic, which is personal data, so it's opt-in. The question comes on first launch, so nobody gets tracked without choosing it, and it can be changed any time in Settings.
+- *What happens if I say no?* Quizzes still work, with the right answer and a cited explanation after each question. Nothing is recorded about your mastery, and "needs work" falls back to the topics you haven't ticked.
+- *Why a card and not a pop-up?* A pop-up blocks the page. The card sits at the top of the notebooks list, so you can ignore it and still open the demo notebook straight away.
+- *Can custom instructions make the tutor ignore the course?* No. They change how answers are written, not where the facts come from. The backend still decides which passages the model sees and drops any citation that doesn't match one of them.
+- *Can anyone else see my settings?* No. The browser never reads Firestore directly (the security rules deny all client access), and the backend only returns `users/{uid}` to the user with that uid's token.
