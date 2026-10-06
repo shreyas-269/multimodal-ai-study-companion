@@ -8,7 +8,11 @@ import { useAuth } from "@/components/auth-provider";
 import { ApiError, getMe } from "@/lib/api";
 import { Button, buttonVariants } from "@/components/ui/button";
 
-export function AccountBar() {
+interface AccountBarProps {
+  compact?: boolean;
+}
+
+export function AccountBar({ compact = false }: AccountBarProps = {}) {
   const { user, loading, signOut } = useAuth();
   const router = useRouter();
 
@@ -39,6 +43,40 @@ export function AccountBar() {
     }
     return coach ? "Study Coach: on" : "Study Coach: off";
   };
+
+  if (compact) {
+    const userLabel = data
+      ? data.is_guest
+        ? "Guest"
+        : (data.email ?? "Unknown")
+      : null;
+
+    return (
+      <div className="flex items-center gap-2">
+        {isLoading && <span className="text-sm text-muted-foreground">Loading…</span>}
+
+        {error && (
+          <span className="text-sm text-muted-foreground truncate">
+            {error instanceof ApiError ? error.message : "Failed to load user profile"}
+          </span>
+        )}
+
+        {userLabel && (
+          <span className="text-sm text-muted-foreground truncate">
+            {userLabel}
+          </span>
+        )}
+
+        <Link href="/settings" className={buttonVariants({ variant: "ghost", size: "sm" })}>
+          Settings
+        </Link>
+        <Button variant="ghost" size="sm" onClick={handleSignOut} disabled={isSigningOut}>
+          Sign out
+        </Button>
+        {signOutError && <span className="text-sm text-muted-foreground">{signOutError}</span>}
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 rounded-lg border p-4">

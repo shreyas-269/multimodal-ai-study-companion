@@ -244,36 +244,83 @@ function NotebookContent() {
   };
 
   return (
-    <main
-      className={`p-8 space-y-8 ${
-        viewerSource ? "max-w-7xl mx-auto" : "max-w-4xl mx-auto"
-      }`}
-    >
-      <div className="space-y-4">
-        <div>
-          <Link href="/notebooks" className="text-sm text-muted-foreground hover:underline">
-            ← Back to notebooks
-          </Link>
+    <div className="flex min-h-screen flex-col lg:h-screen">
+      <div className="flex flex-wrap items-center gap-3 border-b px-4 py-2">
+        <Link href="/notebooks" className="text-sm text-muted-foreground hover:underline">
+          ← Notebooks
+        </Link>
+        <h1 className="text-base font-semibold truncate min-w-0">{notebook.name}</h1>
+        {notebook.is_demo && (
+          <span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-semibold text-secondary-foreground">
+            Demo
+          </span>
+        )}
+        <span className="text-xs text-muted-foreground capitalize">
+          Status: {notebook.status}
+        </span>
+        <div className="ml-auto">
+          <AccountBar compact />
         </div>
-        <AccountBar />
       </div>
 
-      <div className={viewerSource ? "flex flex-col lg:flex-row gap-8 items-start" : ""}>
-        <div className={viewerSource ? "w-full lg:w-1/2 space-y-8 min-w-0" : "space-y-8"}>
-          <div className="space-y-1">
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold tracking-tight">{notebook.name}</h1>
-              {notebook.is_demo && (
-                <span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-semibold text-secondary-foreground">
-                  Demo
-                </span>
+      <main className="flex flex-1 flex-col lg:min-h-0 lg:flex-row">
+        <aside
+          aria-label="Sources"
+          className="space-y-6 p-4 lg:w-72 lg:shrink-0 lg:overflow-y-auto lg:border-r"
+        >
+          {/* F2: the flat topic list goes here, above Sources */}
+
+          <section className="space-y-3">
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-semibold">Sources</h2>
+              {sources.length > 0 && (
+                <span className="text-xs text-muted-foreground">{sources.length}</span>
               )}
             </div>
-            <p className="text-sm text-muted-foreground capitalize">Status: {notebook.status}</p>
-          </div>
 
-          <section className="rounded-lg border p-6 space-y-4">
-            <h2 className="text-lg font-semibold">Upload source</h2>
+            {sourcesQuery.isPending && (
+              <p className="text-sm text-muted-foreground">Loading sources…</p>
+            )}
+
+            {sourcesQuery.isError && (
+              <p className="text-sm text-muted-foreground">
+                {sourcesQuery.error instanceof ApiError
+                  ? sourcesQuery.error.message
+                  : "Failed to load sources."}
+              </p>
+            )}
+
+            {!sourcesQuery.isPending && !sourcesQuery.isError && sources.length === 0 && (
+              <p className="text-sm text-muted-foreground">No sources yet.</p>
+            )}
+
+            {sources.length > 0 && (
+              <div className="grid gap-3">
+                {sources.map((src) => (
+                  <SourceCard
+                    key={src.id}
+                    source={src}
+                    onOpenPdf={(sourceId, title) =>
+                      openSource({ sourceId, title, page: 1 })
+                    }
+                  />
+                ))}
+              </div>
+            )}
+
+            {sourcesQuery.hasNextPage && (
+              <Button
+                variant="outline"
+                onClick={() => sourcesQuery.fetchNextPage()}
+                disabled={sourcesQuery.isFetchingNextPage}
+              >
+                {sourcesQuery.isFetchingNextPage ? "Loading more sources…" : "Load more sources"}
+              </Button>
+            )}
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="text-sm font-semibold">Add a source</h2>
             {!isOwner ? (
               <p className="text-sm text-muted-foreground">Only this notebook&apos;s owner can add sources.</p>
             ) : (
@@ -309,57 +356,10 @@ function NotebookContent() {
               </form>
             )}
           </section>
+        </aside>
 
-          <section className="space-y-4">
-            <h2 className="text-lg font-semibold">Sources</h2>
-
-            {sourcesQuery.isPending && (
-              <p className="text-sm text-muted-foreground">Loading sources…</p>
-            )}
-
-            {sourcesQuery.isError && (
-              <p className="text-sm text-muted-foreground">
-                {sourcesQuery.error instanceof ApiError
-                  ? sourcesQuery.error.message
-                  : "Failed to load sources."}
-              </p>
-            )}
-
-            {!sourcesQuery.isPending && !sourcesQuery.isError && sources.length === 0 && (
-              <p className="text-sm text-muted-foreground">No sources yet.</p>
-            )}
-
-            {sources.length > 0 && (
-              <div
-                className={
-                  viewerSource ? "grid gap-3" : "grid gap-3 sm:grid-cols-2"
-                }
-              >
-                {sources.map((src) => (
-                  <SourceCard
-                    key={src.id}
-                    source={src}
-                    onOpenPdf={(sourceId, title) =>
-                      openSource({ sourceId, title, page: 1 })
-                    }
-                  />
-                ))}
-              </div>
-            )}
-
-            {sourcesQuery.hasNextPage && (
-              <Button
-                variant="outline"
-                onClick={() => sourcesQuery.fetchNextPage()}
-                disabled={sourcesQuery.isFetchingNextPage}
-              >
-                {sourcesQuery.isFetchingNextPage ? "Loading more sources…" : "Load more sources"}
-              </Button>
-            )}
-          </section>
-
-          {/* Ask section */}
-          <section className="space-y-6 pt-4 border-t">
+        <section aria-label="Ask" className="min-w-0 flex-1 lg:overflow-y-auto">
+          <div className="mx-auto w-full max-w-3xl space-y-6 p-6">
             <div className="space-y-1">
               <h2 className="text-lg font-semibold">Ask your sources</h2>
               <p className="text-xs text-muted-foreground">
@@ -484,13 +484,14 @@ function NotebookContent() {
                 </div>
               </div>
             )}
-          </section>
-        </div>
+          </div>
+        </section>
 
         {viewerSource && (
           <aside
             ref={viewerRef}
-            className="w-full lg:w-1/2 lg:sticky lg:top-6 lg:h-[calc(100vh-3rem)] lg:overflow-y-auto rounded-lg border bg-card p-4"
+            aria-label="PDF viewer"
+            className="w-full border-t bg-card p-4 lg:w-[42%] lg:shrink-0 lg:overflow-y-auto lg:border-l lg:border-t-0"
           >
             <PdfViewer
               key={viewerSource.sourceId}
@@ -503,7 +504,7 @@ function NotebookContent() {
             />
           </aside>
         )}
-      </div>
-    </main>
+      </main>
+    </div>
   );
 }
