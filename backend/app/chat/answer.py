@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 
-from app.llm.generate import generate_json
+from app.llm.generate import generate_json_with_model
 from app.llm.prompts.ask import PROMPT_VERSION, build_contents, build_system_instruction
 from app.models.citation import Citation, OpenPdfTarget, Paragraph
 from app.models.notebook import Notebook
@@ -21,7 +21,7 @@ def answer_question(
     question: str,
     chunks: list[RetrievedChunk],
     allow_outside: bool = False,
-) -> list[Paragraph]:
+) -> tuple[list[Paragraph], str]:
     sources_by_id = {s.source_id: s for s in notebook.sources_summary}
     chunks_data = []
     for idx, c in enumerate(chunks, start=1):
@@ -39,7 +39,7 @@ def answer_question(
         question.strip(),
     ]
 
-    llm_output = generate_json(
+    llm_output, model_name = generate_json_with_model(
         prompt_version=PROMPT_VERSION,
         system_instruction=system_instruction,
         contents=contents,
@@ -83,4 +83,4 @@ def answer_question(
             images=[],
         ))
 
-    return paragraphs
+    return paragraphs, model_name

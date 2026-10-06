@@ -95,6 +95,7 @@ Names only; `.env.example` is the authoritative list and never holds values.
 | --- | --- | --- |
 | `GEMINI_API_KEY` | backend, eval | Gemini access |
 | `GEMINI_MODEL` | backend, eval | Exact Gemini Flash model name |
+| `GEMINI_FALLBACK_MODELS` | backend, eval | Comma-separated models tried in order after GEMINI_MODEL when it returns 429 or stays unavailable after retries; each free-tier model has its own daily quota |
 | `FIREBASE_PROJECT_ID` | backend | Project ID |
 | `FIREBASE_STORAGE_BUCKET` | backend | Storage bucket |
 | `GOOGLE_APPLICATION_CREDENTIALS` | backend (laptop scripts against the real project) | Path to a service-account key file kept outside the repo |

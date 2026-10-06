@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     firestore_emulator_host: str | None = None
     firebase_auth_emulator_host: str | None = None
     storage_emulator_host: str | None = None
+    gemini_fallback_models: str | None = None
 
     @field_validator(
         "google_application_credentials",
@@ -39,6 +40,7 @@ class Settings(BaseSettings):
         "firebase_auth_emulator_host",
         "storage_emulator_host",
         "course_data_dir",
+        "gemini_fallback_models",
         mode="before",
     )
     @classmethod
@@ -46,6 +48,16 @@ class Settings(BaseSettings):
         if v == "" or (isinstance(v, str) and not v.strip()):
             return None
         return v
+
+    @property
+    def gemini_model_chain(self) -> list[str]:
+        chain = [self.gemini_model]
+        if self.gemini_fallback_models:
+            for raw in self.gemini_fallback_models.split(","):
+                m = raw.strip()
+                if m and m not in chain:
+                    chain.append(m)
+        return chain
 
     @property
     def cors_origins_list(self) -> list[str]:

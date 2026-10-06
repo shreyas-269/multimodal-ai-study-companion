@@ -5,7 +5,6 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from app.api.access import get_readable_notebook
 from app.chat.answer import answer_question
-from app.config import get_settings
 from app.models.ask import AskRequest, AskResponse, ContextChunk
 from app.models.notebook import Notebook
 from app.retrieval.search import search
@@ -35,7 +34,7 @@ def post(
         )
 
     chunks = search(notebook, request.question)
-    paragraphs = answer_question(
+    paragraphs, model_name = answer_question(
         notebook=notebook,
         question=request.question,
         chunks=chunks,
@@ -56,6 +55,6 @@ def post(
     return AskResponse(
         paragraphs=paragraphs,
         context=context,
-        model=get_settings().gemini_model,
+        model=model_name,
         latency_ms=latency_ms,
     )

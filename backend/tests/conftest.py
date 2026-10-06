@@ -149,3 +149,36 @@ def mock_gemini_client(monkeypatch):
     monkeypatch.setattr("app.llm.client.get_genai_client", lambda: fake_client)
     monkeypatch.setattr("app.llm.generate.get_genai_client", lambda: fake_client)
     yield fake_client
+
+
+@pytest.fixture(autouse=True)
+def single_model_chain(monkeypatch):
+    """Existing tests assume one model; chain tests pass models= or set fallbacks."""
+    from app.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "gemini_fallback_models", None)
+
+
+@pytest.fixture(autouse=True)
+def reset_llm_skip_tracker():
+    """Reset LLM model skip tracker before and after each test."""
+    from app.llm.generate import reset_skip_tracker
+
+    reset_skip_tracker()
+    yield
+    reset_skip_tracker()
+
+
+@pytest.fixture
+def cache_tracker():
+    """Snapshot llm_cache IDs at setup; at teardown delete only new IDs created in test."""
+    db = get_db()
+    before_ids = {doc.id for doc in db.collection("llm_cache").stream()}
+    yield before_ids
+    after_ids = {doc.id for doc in db.collection("llm_cache").stream()}
+    for doc_id in after_ids - before_ids:
+        try:
+            from app.db.paths import llm_cache_path
+            db.document(llm_cache_path(doc_id)).delete()
+        except Exception:
+            pass
