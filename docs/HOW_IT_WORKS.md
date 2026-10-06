@@ -325,3 +325,5 @@ Template for each feature:
 - *Why is there no topic list yet?* The topics come from the backend's topic tagging, which lands next. The left panel already has the spot for it, above the sources.
 - *Does it work on a phone?* Yes. Below 1024 pixels the panels stack, and clicking a citation scrolls to the document.
 - *Did the redesign risk breaking anything?* It changed markup and styles only. Every request, error message and timeout stayed the same, and a separate check compared the code before and after to confirm it.
+
+- *What went wrong while building it?* Nothing broke, but moving the citation button into its own component left an unused callback behind in the notebook page. Before deleting it, the re-verification read the previous commit's code to prove the callback only opened the PDF. The narrow-screen "scroll down to the viewer" lives in an effect that watches the viewer's navigation counter, so it still fires for every citation, wherever the button is.
