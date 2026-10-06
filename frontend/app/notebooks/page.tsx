@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRequireUser } from "@/lib/use-require-user";
 import { AccountBar } from "@/components/account-bar";
+import { StudyCoachPrompt } from "@/components/study-coach-prompt";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -71,6 +72,7 @@ export default function NotebooksPage() {
       <div className="space-y-4">
         <h1 className="text-2xl font-bold tracking-tight">Notebooks</h1>
         <AccountBar />
+        <StudyCoachPrompt />
       </div>
 
       <section className="rounded-lg border p-6 space-y-4">

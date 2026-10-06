@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/components/auth-provider";
 import { ApiError, getMe } from "@/lib/api";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 
 export function AccountBar() {
   const { user, loading, signOut } = useAuth();
@@ -62,9 +63,14 @@ export function AccountBar() {
       </div>
 
       <div className="flex flex-col items-start sm:items-end gap-1">
-        <Button variant="outline" onClick={handleSignOut} disabled={isSigningOut}>
-          Sign out
-        </Button>
+        <div className="flex items-center gap-2">
+          <Link href="/settings" className={buttonVariants({ variant: "outline" })}>
+            Settings
+          </Link>
+          <Button variant="outline" onClick={handleSignOut} disabled={isSigningOut}>
+            Sign out
+          </Button>
+        </div>
         {signOutError && <p className="text-sm text-muted-foreground">{signOutError}</p>}
       </div>
     </div>
