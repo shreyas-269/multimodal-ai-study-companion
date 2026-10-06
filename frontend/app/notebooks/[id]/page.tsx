@@ -22,6 +22,7 @@ import {
   type AskResponse,
 } from "@/lib/api";
 import { ViewerProvider, useViewer } from "@/components/viewer-context";
+import { SourceCard } from "@/components/source-card";
 
 const PdfViewer = dynamic(
   () => import("@/components/pdf-viewer").then((mod) => mod.PdfViewer),
@@ -329,33 +330,21 @@ function NotebookContent() {
             )}
 
             {sources.length > 0 && (
-              <ul className="divide-y rounded-lg border">
+              <div
+                className={
+                  viewerSource ? "grid gap-3" : "grid gap-3 sm:grid-cols-2"
+                }
+              >
                 {sources.map((src) => (
-                  <li key={src.id} className="p-4 space-y-1">
-                    <div className="flex items-center justify-between gap-4">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <span className="font-medium truncate">{src.title}</span>
-                        {src.status === "ready" && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() =>
-                              openSource({ sourceId: src.id, title: src.title, page: 1 })
-                            }
-                          >
-                            Open
-                          </Button>
-                        )}
-                      </div>
-                      <span className="text-sm text-muted-foreground capitalize shrink-0">{src.status}</span>
-                    </div>
-                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                      {src.page_count != null && <span>{src.page_count} pages</span>}
-                      {src.error && <span className="text-muted-foreground">{src.error}</span>}
-                    </div>
-                  </li>
+                  <SourceCard
+                    key={src.id}
+                    source={src}
+                    onOpenPdf={(sourceId, title) =>
+                      openSource({ sourceId, title, page: 1 })
+                    }
+                  />
                 ))}
-              </ul>
+              </div>
             )}
 
             {sourcesQuery.hasNextPage && (
