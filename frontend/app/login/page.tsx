@@ -2,12 +2,13 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/components/auth-provider";
 import { getAuthErrorMessage } from "@/lib/auth-errors";
+import { APP_NAME, APP_TAGLINE, GUEST_HINT } from "@/lib/site";
 
 export default function LoginPage() {
   const { user, loading, signIn, createAccount, continueAsGuest } = useAuth();
@@ -76,8 +77,9 @@ export default function LoginPage() {
   return (
     <main className="flex min-h-screen items-center justify-center p-4">
       <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle>Study Companion</CardTitle>
+        <CardHeader className="space-y-1">
+          <h1 className="text-xl font-semibold tracking-tight">{APP_NAME}</h1>
+          <p className="text-sm text-muted-foreground">{APP_TAGLINE}</p>
         </CardHeader>
         <CardContent>
           <form ref={formRef} onSubmit={handleSignIn} className="space-y-4">
@@ -120,7 +122,7 @@ export default function LoginPage() {
             </div>
           </form>
 
-          <div className="mt-4 pt-4 border-t">
+          <div className="mt-4 pt-4 border-t space-y-2">
             <Button
               type="button"
               variant="ghost"
@@ -130,6 +132,9 @@ export default function LoginPage() {
             >
               Continue as guest
             </Button>
+            <p className="text-xs text-muted-foreground text-center">
+              {GUEST_HINT}
+            </p>
           </div>
 
           {errorMessage && (

@@ -66,6 +66,9 @@ export default function NotebooksPage() {
   }
 
   const notebooks = data?.pages.flatMap((page) => page.items) ?? [];
+  const isFirstPageLoaded = !isLoading && !isError && !!data;
+  const isAllDemoOrEmpty = notebooks.every((nb) => nb.is_demo);
+  const showEmptyState = isFirstPageLoaded && !hasNextPage && isAllDemoOrEmpty;
 
   return (
     <main className="p-8 space-y-8 max-w-4xl mx-auto">
@@ -114,8 +117,10 @@ export default function NotebooksPage() {
           </p>
         )}
 
-        {!isLoading && !isError && notebooks.length === 0 && (
-          <p className="text-sm text-muted-foreground">No notebooks yet.</p>
+        {showEmptyState && notebooks.length === 0 && (
+          <p className="text-sm text-muted-foreground">
+            No notebooks yet. Create one to upload a PDF and start asking questions.
+          </p>
         )}
 
         {notebooks.length > 0 && (
@@ -139,6 +144,12 @@ export default function NotebooksPage() {
               </li>
             ))}
           </ul>
+        )}
+
+        {showEmptyState && notebooks.length > 0 && (
+          <p className="text-sm text-muted-foreground">
+            You haven&apos;t created a notebook yet. Open the demo course to try it, or create a notebook to upload your own PDFs.
+          </p>
         )}
 
         {hasNextPage && (
