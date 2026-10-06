@@ -471,6 +471,12 @@ export interface components {
             page_count?: number | null;
             /** Duration S */
             duration_s?: number | null;
+            /** Licence */
+            licence?: string | null;
+            /** Attribution */
+            attribution?: string | null;
+            /** Youtube Url */
+            youtube_url?: string | null;
             /** Job Id */
             job_id?: string | null;
         };
