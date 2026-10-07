@@ -352,3 +352,45 @@ Template for each feature:
 - *Why doesn't the tab show the notebook's name?* That would mean setting the title from the browser after the data loads, which can fight Next.js's own title handling. A plain "Notebook" title can't break, and the name is right there on the page.
 - *Why tell guests their data is lost on sign-out?* A guest is a real but anonymous account; once you sign out there's no way back into it. Saying so up front is better than a judge losing their quiz progress by surprise.
 - *Why a black square for the icon?* A black outline disappears on a dark tab bar; a black square with a white mark is visible on both light and dark ones, and keeps the app monochrome.
+
+
+---
+
+## V1 · Numerical verifier
+
+**What it does:** Checks that a numerical quiz question's answer is actually right, by running a short piece of Python that computes it with exact fractions. For each numerical question, the question generator (S6) writes a stated answer such as "1/221" and a small snippet such as `answer = comb(4, 2) / comb(52, 2)`. The verifier refuses anything outside a tiny arithmetic language, runs the snippet in a separate locked-down Python process, and passes the question only if the computed fraction equals the stated answer exactly. A second function grades what students type: "3/8", "0.375" and "37.5%" all count for 3/8, and "0.333" counts for 1/3, but "0.33" doesn't.
+
+**Data flow:**
+- `verify_numerical(solution_code, stated_answer)` in `app/questions/numerical.py`:
+  1. `parse_exact` reads the stated answer: an integer, `a/b`, or an exact decimal, matched with one `re.fullmatch` and built from its digits as a `Fraction`. Anything else returns `bad stated answer:`.
+  2. `check_snippet` parses the snippet with `ast` and checks every node against a whitelist. Allowed: assignments, `for`, `if`, arithmetic, comparisons, comprehensions, small lists, sets and dicts, and calls to ten named functions (`Fraction`, `comb`, `perm`, `factorial`, `sum`, `min`, `max`, `abs`, `len`, `range`). Not allowed: imports, attribute access, strings, floats, `def`, `lambda`, `while`, or any name starting with `_`. A failure returns `rejected:` with the reason, and no process is started.
+  3. A child process starts: the base Python interpreter with `-I -S -B` (isolated: no environment variables, no site-packages, no .pyc files) running `app/questions/numerical_sandbox.py`. The snippet is sent as UTF-8 bytes on stdin, with a 2-second timeout.
+  4. Before reading anything, the child caps its own memory at 512 MiB: a Windows Job Object through `ctypes`, or `RLIMIT_AS` on Linux. If the cap can't be applied, it refuses to run the snippet.
+  5. The child checks the snippet again, then rewrites `+ * / **` into guard functions and wraps every loop in a shared counter. It runs the result with only four builtins. `/` becomes `Fraction(a, b)`, so division is always exact. The guards stop numbers above 2,000,000 bits, exponents above 10,000, `comb`/`perm`/`factorial` above 10,000, ranges over 1,000,000 items, and more than 1,000,000 loop items in total.
+  6. The child prints one JSON line, such as `{"ok": true, "num": "1", "den": "221"}` or an error kind with a message. The parent checks its shape, then compares the fractions.
+  7. The result is `NumericalVerification {method: "python", passed, detail, computed}`. `detail` always starts with `ok:`, `mismatch:`, `bad stated answer:`, `rejected:`, `limit:`, `error:`, `timeout:` or `crash:`, so the generator can be told exactly what went wrong.
+- `grade_numerical(student_answer, correct_answer)`:
+  1. The correct answer goes through `parse_exact`.
+  2. The student's text goes through one `re.fullmatch`, which accepts a fraction, a decimal, a comma-grouped integer, and an optional `%`.
+  3. An exact match is correct. Otherwise, a decimal with at least 3 significant figures that equals the correct value rounded or truncated to the same number of places is correct.
+  4. It never raises on student input.
+- Nothing here touches Firestore, Gemini or the network.
+
+**Main files:**
+- `backend/app/questions/numerical.py`: `parse_exact`, `grade_numerical`, `verify_numerical`, `NumericalVerification`, and `SNIPPET_RULES` (the rules text the S6 generation prompt includes word for word).
+- `backend/app/questions/numerical_sandbox.py`: standard library only. It holds the whitelist, the syntax-tree rewrite, the guards, the memory cap and the child's entry point.
+- `backend/tests/test_numerical.py`: 191 tests.
+
+**A judge might ask… / my answer:**
+- *Why not trust the AI's answer?* Language models make arithmetic slips, and a quiz that marks a correct student wrong is worse than no quiz. So the model also has to write code that computes the answer, and a question enters the bank only if the code and the stated answer agree exactly. A question that fails is rejected, never shown.
+- *Why fractions instead of decimals?* This course's numerical answers are exact fractions. With floats, 0.1 + 0.2 isn't 0.3, so an exact comparison fails correct answers, and a tolerance lets near-misses through. Fractions make "equal" mean equal: `comb(4, 2) / comb(52, 2)` is exactly 1/221.
+- *Isn't running AI-written code dangerous?* Yes, which is why there are five layers. The whitelist rejects anything that isn't arithmetic before any process starts. The child gets only four builtins. Guards cap the size of numbers, exponents and loops. The child caps its own memory at 512 MiB. And it is killed after 2 seconds. The suite has 40 hostile snippets (imports, `__import__`, attribute tricks, `eval`, huge loops, `10 ** 10 ** 10`), and a second AI model invented 35 more. Every one ended as rejected, limit, error or timeout; none crashed, and no child got past 512 MiB.
+- *If the whitelist blocks everything, why a separate process?* Defence in depth. Also, Python can't reliably stop a runaway thread, but it can always kill a process, and the memory cap applies per process.
+- *Why at least 3 significant figures for decimals?* It's the usual exam convention. A 2-figure rule would accept anything from 0.325 to 0.335 for 1/3, wide enough to pass answers from a slightly wrong method. Exact forms like 1/3 are always accepted.
+- *What if a student types nonsense?* It's graded wrong, never an error. A fixed-seed fuzz test sends 2,000 random strings of digits and symbols, and verification sent 20,000 more.
+- *Where does it run?* The question bank is built by a script on the laptop (Windows), so `verify_numerical` runs there. `grade_numerical` runs in the hosted backend for every quiz answer. Both platforms are handled.
+- *Known limits?* Subtraction, modulo and floor division aren't size-guarded; the memory cap and the timeout bound them, which the verification confirmed. Extremely deep expressions (about 330 chained terms) fail safely with a recursion error. The Linux memory-cap branch is exercised only on Linux, at deployment.
+- *What went wrong while building it?*
+  - The plan review measured a snippet that passed every check allocating memory at 1.8 GiB/s on Windows, which has no built-in memory limit for a child process; the Job Object cap fixed that. The review also found that formatting an error message could itself raise (a `KeyError` with a 20,000-bit key) and that non-UTF-8 error output broke the crash path.
+  - The final verification found three more. `grade_numerical` crashed on "1.2.3", which is now parsed with one full-string match and fuzz-tested. Windows text mode turned every `\n` into `\r\n` on the way to the child, so a snippet the parent accepted at 2,000 characters was too long for the child; the snippet is now sent as bytes. And the exponent cap was 20,000 instead of 10,000.
+- *How was it tested?* 191 tests in about 25 seconds, with no Gemini and no Firestore. Each hostile snippet breaks exactly one rule, and its test checks that this specific rule fired, not just that something did.
