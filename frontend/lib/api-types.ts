@@ -216,6 +216,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/notebooks/{nb}/question-bank": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get */
+        get: operations["question_bank_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/notebooks/{nb}/quizzes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create */
+        post: operations["quizzes_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/notebooks/{nb}/quizzes/{q}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get */
+        get: operations["quizzes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/notebooks/{nb}/quizzes/{q}/answers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Answer */
+        post: operations["quizzes_answer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/notebooks/{nb}/quizzes/{q}/finish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Finish */
+        post: operations["quizzes_finish"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -304,6 +389,28 @@ export interface components {
              * @default 0
              */
             questions_verified: number;
+        };
+        /** Feedback */
+        Feedback: {
+            /**
+             * Verdict
+             * @enum {string}
+             */
+            verdict: "correct" | "incorrect" | "partial";
+            /** Correct Answer */
+            correct_answer: string;
+            /** Correct Option Id */
+            correct_option_id?: string | null;
+            /** Explanation */
+            explanation: string;
+            /** Citations */
+            citations?: components["schemas"]["Citation"][];
+            /** Misconception */
+            misconception?: string | null;
+            /** Rubric Coverage */
+            rubric_coverage?: {
+                [key: string]: unknown;
+            }[] | null;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -452,6 +559,148 @@ export interface components {
             /** Images */
             images?: components["schemas"]["Image"][];
         };
+        /** QuestionBankItem */
+        QuestionBankItem: {
+            /** Topic Id */
+            topic_id: string;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "mcq" | "numerical" | "short";
+            /** Verified */
+            verified: number;
+            /** Rejected */
+            rejected: number;
+        };
+        /** QuestionBankResponse */
+        QuestionBankResponse: {
+            /** Items */
+            items: components["schemas"]["QuestionBankItem"][];
+            /** Total Verified */
+            total_verified: number;
+            /** Next Cursor */
+            next_cursor?: null;
+        };
+        /** QuestionOptionOut */
+        QuestionOptionOut: {
+            /** Id */
+            id: string;
+            /** Text */
+            text: string;
+        };
+        /**
+         * QuestionOut
+         * @description The only question shape sent before answering.
+         */
+        QuestionOut: {
+            /** Id */
+            id: string;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "mcq" | "numerical" | "short";
+            /** Topic Id */
+            topic_id: string;
+            /** Difficulty */
+            difficulty: number;
+            /** Stem */
+            stem: string;
+            /** Options */
+            options?: components["schemas"]["QuestionOptionOut"][] | null;
+        };
+        /** QuizAnswerRecord */
+        QuizAnswerRecord: {
+            /** Question Id */
+            question_id: string;
+            /** Answer */
+            answer: string;
+            feedback: components["schemas"]["Feedback"];
+        };
+        /** QuizAnswerRequest */
+        QuizAnswerRequest: {
+            /** Question Id */
+            question_id: string;
+            /** Answer */
+            answer: string;
+            /** Time Ms */
+            time_ms: number;
+        };
+        /** QuizAnswerResponse */
+        QuizAnswerResponse: {
+            /** Question Id */
+            question_id: string;
+            /** Answer */
+            answer: string;
+            /** Already Answered */
+            already_answered: boolean;
+            feedback: components["schemas"]["Feedback"];
+        };
+        /** QuizCreate */
+        QuizCreate: {
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "chosen" | "adaptive" | "diagnostic";
+            /** Topic Ids */
+            topic_ids?: string[] | null;
+            /**
+             * Count
+             * @default 5
+             */
+            count: number;
+        };
+        /** QuizOut */
+        QuizOut: {
+            /** Id */
+            id: string;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "chosen" | "adaptive" | "diagnostic";
+            /** Topic Ids */
+            topic_ids: string[];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "in_progress" | "finished";
+            /** Questions */
+            questions: components["schemas"]["QuestionOut"][];
+            /** Answers */
+            answers: components["schemas"]["QuizAnswerRecord"][];
+            summary?: components["schemas"]["QuizSummary"] | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** QuizSummary */
+        QuizSummary: {
+            /** Quiz Id */
+            quiz_id: string;
+            /**
+             * Status
+             * @constant
+             */
+            status: "finished";
+            /** Total */
+            total: number;
+            /** Answered */
+            answered: number;
+            /** Correct */
+            correct: number;
+            /** Score */
+            score: number;
+            /** By Topic */
+            by_topic: components["schemas"]["TopicSummaryItem"][];
+            /** Report */
+            report?: null;
+        };
         /**
          * Refs
          * @description Explicit references filter for search (accepted and ignored until S5).
@@ -580,6 +829,17 @@ export interface components {
             items: components["schemas"]["Citation"][];
             /** Next Cursor */
             next_cursor?: null;
+        };
+        /** TopicSummaryItem */
+        TopicSummaryItem: {
+            /** Topic Id */
+            topic_id: string;
+            /** Total */
+            total: number;
+            /** Answered */
+            answered: number;
+            /** Correct */
+            correct: number;
         };
         /**
          * User
@@ -1068,6 +1328,182 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TopicSourceList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    question_bank_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                nb: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionBankResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    quizzes_create: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                nb: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QuizCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    quizzes_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                nb: string;
+                q: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    quizzes_answer: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                nb: string;
+                q: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QuizAnswerRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizAnswerResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    quizzes_finish: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                nb: string;
+                q: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuizSummary"];
                 };
             };
             /** @description Validation Error */
