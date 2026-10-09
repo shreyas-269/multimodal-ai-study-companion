@@ -394,3 +394,80 @@ Template for each feature:
   - The plan review measured a snippet that passed every check allocating memory at 1.8 GiB/s on Windows, which has no built-in memory limit for a child process; the Job Object cap fixed that. The review also found that formatting an error message could itself raise (a `KeyError` with a 20,000-bit key) and that non-UTF-8 error output broke the crash path.
   - The final verification found three more. `grade_numerical` crashed on "1.2.3", which is now parsed with one full-string match and fuzz-tested. Windows text mode turned every `\n` into `\r\n` on the way to the child, so a snippet the parent accepted at 2,000 characters was too long for the child; the snippet is now sent as bytes. And the exponent cap was 20,000 instead of 10,000.
 - *How was it tested?* 191 tests in about 25 seconds, with no Gemini and no Firestore. Each hostile snippet breaks exactly one rule, and its test checks that this specific rule fired, not just that something did.
+
+---
+
+## I3a · Lecture transcription
+
+**What it does:** A laptop-only script turns the six demo lecture videos into timestamped transcripts, so the app can later cite a lecture down to the moment an idea is explained. It runs Whisper (faster-whisper with the `medium.en` model) on the laptop's CPU. It never uses the Gemini API, never touches Firestore or Storage, and writes only outside the repo. The first full run transcribed 5 h 2 min of audio in 3 h 31 min overnight (0.70 seconds of work per second of audio), with no failures.
+
+**Data flow:** `uv run --env-file ../.env --group laptop python scripts/transcribe_lectures.py` → finds `videos\L01.mp4` to `L06.mp4` in `COURSE_DATA_DIR` → reads each video's length from its container (PyAV, no decoding) → skips lectures that already have a valid finished transcript → loads the Whisper model once → for each remaining lecture, transcribes with voice-activity detection on, English, beam size 5, not conditioned on the previous text, plus a short prompt of course terms (Bayes' rule, PMF, Tsitsiklis…) → writes `derived\transcripts\L01.txt` (one "[mm:ss] text" line per segment, for reading) and then `L01.json` (model, settings, duration, timing, and every segment with start, end, text and three confidence measures). Times are seconds from the start of the video file. Each file is written to a `.tmp` and then renamed into place, so a crash never leaves a half-written transcript that looks finished. Progress goes to the console and `transcribe.log` every 5 minutes of audio. A `--clip-seconds` trial transcribes just the start of one lecture into `_trials\` and estimates how long the full run will take. Task I3b turns these segments into searchable chunks with YouTube timestamps.
+
+**Main files:** `backend/scripts/transcribe_lectures.py`, `backend/tests/test_transcribe_lectures.py`, `backend/pyproject.toml` (faster-whisper and an `av<19` cap in the `laptop` dependency group), `backend/uv.lock`.
+
+**A judge might ask… / my answer:**
+- *Why transcribe locally instead of using an API?* It's free, it never touches the small daily Gemini quota, and it's reproducible from the video files alone. Whisper runs fine on a laptop CPU: about 35 minutes per 50-minute lecture.
+- *Why medium.en and not a smaller model?* A 5-minute trial estimated the full run at about 6 hours, inside the overnight window. Accuracy on terms like "PMF" and "Bayes" matters because retrieval searches this text. The real run was faster than the trial (the trial ran while other programs were using the CPU).
+- *How precise are the timestamps?* Whisper gives a start and end for every segment, usually a few seconds long, measured from the start of the video file. That's precise enough for a citation to open the YouTube video within seconds of the example.
+- *Why voice-activity detection and "not conditioned on previous text"?* Long recordings can send Whisper into a loop that repeats the same sentence. Skipping silences and not feeding each window the previous text are the standard defences; each segment also stores confidence measures, so suspicious ones can be filtered later. A check of all six transcripts found no repetition loops and coverage to within 1 second of each video's end.
+- *What if the laptop dies mid-run?* Re-running the same command skips every finished lecture and redoes only the interrupted one. Transcripts are written to a temporary file and renamed only when complete, so a half-finished file is never mistaken for a finished one.
+- *Is it in the hosted app?* No. Whisper lives in a separate `laptop` dependency group that the server image never installs. Videos are ingested only on the laptop.
+- *What went wrong while building it?* The plan review caught that the timer must cover the whole transcription (faster-whisper does its work lazily, while the results are read, not when the function is called), and that `--force` had to delete the old transcript first so a crash couldn't leave an old "finished" file next to new text. The verify then ran the script for real on a 30-second clip, even though all 101 tests already passed, and it crashed: PyAV 19 had removed an argument that faster-whisper still passes, so every lecture would have failed overnight. Capping PyAV below 19 fixed it. The verify also found that a trial run combined with `--force` would delete a real finished transcript; trial runs now never touch the real files, and a test compares them byte for byte. Overnight, the laptop's lid setting turned out not to be adjustable, so the lid simply stayed open while sleep on AC was switched off.
+
+---
+
+## I1 · Page labels, licence pages, slides and one citation builder
+
+**What it does:** Every PDF is now read the way a student sees it. Citations show the page number printed in the book ("Grinstead & Snell … p. 137"), not the PDF's internal page number, while the viewer still opens the right physical page. Licence and terms pages (the GNU FDL notice, MIT OpenCourseWare's terms page at the end of every slide deck and recitation) are recognised and never searched or cited. Slide handouts with four slides per page are split into separate slides, each with the exact rectangle it occupies on the page, so a citation can highlight the one slide it comes from. One function builds every citation, so the ask box, chat and the topic Sources button always show identical labels and links.
+
+**Data flow:** upload or the demo-course script → the parse function in `app/ingestion/pdf.py` reads each page's text once with PyMuPDF (`get_text("dict")`) →
+- **Licence check:** a short page (under 400 characters) mentioning `ocw.mit.edu/terms`, or a page with both "GNU Free Documentation License" and "freely redistributable", is recorded in `licence_pages` and produces no chunks.
+- **Page labels** (`labels.py`): the PDF's own labels if it has any; otherwise the printed number at the start or end of each page's top or bottom line. A number counts only when at least two pages agree on the same gap between printed and physical page. Pages between agreeing pages inherit that gap, and a chapter-opening page with no number takes the gap of the range that follows.
+- **Slides** (`slides.py`, only when the source has a `slide_grid` such as "2x2"): finds each slide's frame among the page's drawn rectangles (ignoring small shapes and resolving nested borders), falls back to equal cells if it can't find exactly four, assigns every text line to the slide containing its centre, and converts each frame to the page as displayed (the rotation and crop handled by PyMuPDF's rotation matrix).
+- **Chunks:** at most 400 tokens, never crossing a page or a slide, each with a location: page, printed label, and slide number and rectangle for slides.
+- **Stored:** the source records `page_labels`, `licence_pages`, `slide_grid` and `viewer_path`.
+- **Citing:** `/ask` maps the model's source numbers to chunks → `build_citation` in `app/chat/citations.py` → label "{title} p. {printed page}" (+ " (slide n)") and `open` {pdf, physical page, rectangle for slides only}.
+
+**Main files:** `backend/app/ingestion/pdf.py`, `labels.py`, `slides.py`, `models.py`; `backend/app/chat/citations.py`, `answer.py`; `backend/app/db/sources.py`; `backend/app/api/sources.py`; `backend/tests/test_pdf_ingestion.py`, `test_citations.py`.
+
+**A judge might ask… / my answer:**
+- *Why printed page numbers?* Students look things up in the book by the number printed on the page. The demo textbook is an extract, so PDF page 70 is printed page 137: citing "p. 70" would send them to the wrong place. The viewer still opens the physical page, so the link lands exactly.
+- *Why not just type in the page numbers?* Detection works for any uploaded PDF, not just ours. The course's own page table is used only as a test: the detector reproduces all 165 labels of the demo textbook with no mistakes.
+- *Why exclude licence pages?* They're legal boilerplate. Without exclusion, "MIT OpenCourseWare terms" text gets retrieved for real questions and can even be cited as course content.
+- *How do you know which slide a sentence belongs to?* Each slide's frame is a drawn rectangle on the handout page. Every text line goes to the frame that contains its centre point. Whole text blocks couldn't be used, because PyMuPDF often merges the left and right slides' lines into one block.
+- *Does the highlight land on the right spot if the PDF is rotated or cropped?* Yes. PyMuPDF reports positions on the unrotated page, so every rectangle is converted with the page's rotation matrix. The verify checked a rotated page with an offset crop: the stored rectangle matched the rendered frame within 1 pixel, and the test asserts the hand-computed rectangle.
+- *Do my own uploads get slide highlights?* Uploads get printed page labels and licence-page exclusion. Slide splitting needs to know the layout (four slides per page), which the demo course records in its manifest, so only the demo's slide handouts get highlights in v1.
+- *Did this slow uploads down?* Parsing the 165-page textbook went from 2.5 s to 3.6 s. An upload takes about 70–110 s, almost all of it computing embeddings.
+- *What went wrong while building it?* The plan review caught that the plan assigned text to slides by PyMuPDF's text *blocks*, which span both columns, so the second slide's title "Review of probability models" would have been cited as part of slide 1. Lines never cross frames, so assigning per line fixed it, with a real-file test. The review also found that one phrase in the original licence rule never appears in the real GFDL notice (it was replaced with one that does). The verify confirmed every label, 52 slides with no lost characters, and the box positions by rendering the pages and drawing the boxes. I1 was then committed together with I2 (see I2), because I2's draft code had been written into a file I1 also changed.
+
+---
+
+## I2 · Topics and the demo notebook
+
+**What it does:** One laptop script builds the shared demo notebook from the course manifest: 20 sources (6 slide decks, 12 recitations, the textbook and the syllabus), 399 searchable chunks, and the six syllabus topics with their prerequisites. Every chunk is tagged to a topic without using Gemini. Two new endpoints serve the topic list and each topic's Sources button: a list of citations, one per page (or per slide), built by the same function as every other citation. The lecture videos join the same notebook in I3b.
+
+**Data flow:**
+- **Build:** `uv run --env-file ../.env python scripts/ingest_course.py` (from `backend/`) → refuses to run (exit 2) unless it's pointed at the local emulators → reads `manifest.csv`, which now has `slide_grid`, `topics` and `source_url` columns → parses `syllabus.md` into topics t1–t6 (IDs from the topic number) with summaries and prerequisites → sends each manifest row to a handler by kind:
+  - slide decks and PDFs: store the original, parse with I1's function (passing `slide_grid`), tag each chunk from the row's `topics` value, embed, write the chunks, and only then mark the source ready;
+  - the syllabus: stored, with no chunks;
+  - videos: skipped until I3b.
+  
+  Source IDs come from the file name (`src_l02_slides`), and `ref_n` is the manifest row, so a re-run lands on the same documents. At the end of every run the script **rebuilds** the notebook's source summary, chunk count, status and all topic documents from what's stored, reading only each chunk's source, location and topic (never its embedding).
+- **Tagging:** a lecture's files go to its topic. The textbook uses physical page ranges taken from its section headings ("Independent Events" starts on page 75, Bayes' Formula on page 83, and so on). Where a range genuinely mixes two topics ("t5|t6"), each chunk goes to the topic whose description it is most similar to, by embedding.
+- **Topic locations:** each topic stores one entry per distinct page (or slide), keeping one chunk ID per entry, so "Sources (35)" always means 35 chips.
+- **API:** `GET /v1/notebooks/{nb}/topics` → readable-notebook check → the topic documents in order. `GET /v1/notebooks/{nb}/topics/{t}/sources` → the topic ID must fully match `t1`–`t6` or `other` before anything is read → one topic document → source titles from the notebook's own summary (no extra reads) → `build_citation` for each location.
+
+**Main files:** `backend/scripts/ingest_course.py`, `backend/app/ingestion/syllabus.py`, `topics.py`; `backend/app/db/topics.py`, `sources.py`, `notebooks.py`, `paths.py`; `backend/app/api/topics.py`; `backend/app/models/topic.py`; `backend/tests/test_topics.py`, `test_ingest_course.py`.
+
+**A judge might ask… / my answer:**
+- *Why tag topics without the AI?* It's free, instant and repeatable. The course already defines what belongs where: each lecture's slides and recitations are one topic, and the textbook's sections map to topics by their headings. Embedding similarity settles only the pages that genuinely mix two topics.
+- *How do you know the topic map is right?* It was built from the real section headings on the pages and checked by a second model, which found an error (the independence section starts on page 75, not 77) before anything was built. The verify then reported how the ambiguous pages were split, page by page, and the split matched the content.
+- *Can the build script be run twice?* Yes. Source IDs and chunk IDs are deterministic, a source counts as ready only after all its chunks are written, and the totals and topic lists are recomputed from scratch at the end of every run instead of being added to. A second run takes about 5 seconds and changes nothing.
+- *Why does a topic list "Sources (35)" and not one entry per chunk?* Several chunks can come from the same page. Grouping by page (or slide) keeps the count equal to what a student can open.
+- *Why don't my own notebooks have topics?* The six topics belong to the demo course. Inventing an "Other" topic for uploads would cost a read of every chunk; asking a question across the whole notebook already works.
+- *Can the script damage real data?* It refuses to run unless the emulator settings point at a local `demo-` project. Publishing to the real project is a separate step in deployment.
+- *What went wrong while building it?*
+  - The planning agent started writing code before its plan was approved, into a file that I1 had also changed, so I1 and I2 were verified and committed together.
+  - Before that was caught, a formatter had been run across the whole backend and silently rewrapped 15 committed files from other tasks; a line-ending-insensitive diff found them, and they were restored from git. Agents now never run formatters.
+  - The plan review found the chapter-4 topic map off by two pages, a chunk count that would have doubled on every re-run, and tests that would have overwritten the shared demo notebook. All were fixed in the plan.
+  - The verify found that the script only worked when run as a module, and that one older test assumed no demo notebook exists. Both were fixed and re-verified.
