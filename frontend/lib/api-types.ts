@@ -176,6 +176,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/notebooks/{nb}/topics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List
+         * @description List topics for a readable notebook sorted by order.
+         */
+        get: operations["topics_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/notebooks/{nb}/topics/{t}/sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Sources
+         * @description Return citations for all locations where this topic is covered.
+         */
+        get: operations["topics_list_sources"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -259,11 +299,6 @@ export interface components {
              * @default 0
              */
             chunks: number;
-            /**
-             * Items
-             * @default 0
-             */
-            items: number;
             /**
              * Questions Verified
              * @default 0
@@ -477,8 +512,6 @@ export interface components {
             attribution?: string | null;
             /** Youtube Url */
             youtube_url?: string | null;
-            /** Job Id */
-            job_id?: string | null;
         };
         /**
          * SourceSummary
@@ -501,6 +534,52 @@ export interface components {
              * @enum {string}
              */
             status: "queued" | "processing" | "ready" | "failed";
+        };
+        /**
+         * TopicList
+         * @description Topic list response shape matching api-contract.md.
+         */
+        TopicList: {
+            /** Items */
+            items: components["schemas"]["TopicListItem"][];
+            /** Next Cursor */
+            next_cursor?: null;
+        };
+        /**
+         * TopicListItem
+         * @description Topic list item matching api-contract.md.
+         */
+        TopicListItem: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Order */
+            order: number;
+            /** Summary */
+            summary: string;
+            /**
+             * Is Other
+             * @default false
+             */
+            is_other: boolean;
+            /** Prerequisite Ids */
+            prerequisite_ids?: string[];
+            /**
+             * Location Count
+             * @default 0
+             */
+            location_count: number;
+        };
+        /**
+         * TopicSourceList
+         * @description Topic sources response shape matching api-contract.md.
+         */
+        TopicSourceList: {
+            /** Items */
+            items: components["schemas"]["Citation"][];
+            /** Next Cursor */
+            next_cursor?: null;
         };
         /**
          * User
@@ -922,6 +1001,73 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AskResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    topics_list: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                nb: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TopicList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    topics_list_sources: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                nb: string;
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TopicSourceList"];
                 };
             };
             /** @description Validation Error */
