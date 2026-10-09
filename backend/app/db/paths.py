@@ -56,3 +56,38 @@ def topics_collection_path(nb: str) -> str:
 def topic_path(nb: str, topic_id: str) -> str:
     """Return Firestore document path for a topic."""
     return f"notebooks/{nb}/topics/{topic_id}"
+
+def questions_collection_path(nb: str) -> str:
+    """Return Firestore collection path for a notebook's questions."""
+    return f"notebooks/{nb}/questions"
+
+
+def question_path(nb: str, q: str) -> str:
+    """Return Firestore document path for a question."""
+    return f"notebooks/{nb}/questions/{q}"
+
+
+def member_path(nb: str, uid: str) -> str:
+    """Return Firestore document path for a notebook member."""
+    return f"notebooks/{nb}/members/{uid}"
+
+
+def quizzes_collection_path(nb: str, uid: str) -> str:
+    """Return Firestore collection path for a member's quizzes."""
+    return f"notebooks/{nb}/members/{uid}/quizzes"
+
+
+def quiz_path(nb: str, uid: str, quiz: str) -> str:
+    """Return Firestore document path for a quiz."""
+    return f"notebooks/{nb}/members/{uid}/quizzes/{quiz}"
+
+
+def attempts_collection_path(nb: str, uid: str) -> str:
+    """Return Firestore collection path for a member's attempts."""
+    return f"notebooks/{nb}/members/{uid}/attempts"
+
+
+def attempt_path(nb: str, uid: str, attempt: str) -> str:
+    """Return Firestore document path for an attempt."""
+    return f"notebooks/{nb}/members/{uid}/attempts/{attempt}"
+
