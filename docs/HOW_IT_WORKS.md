@@ -520,3 +520,43 @@ Template for each feature:
   - It also found that one missing transcript would have set the notebook's status to a value the API doesn't allow, making every request fail.
   - It tested pinpointing on real paragraphs: single segments landed 11 seconds or more late, so pinpointing uses segment pairs.
   - The verify confirmed the radar link at 9.9 seconds before the first mention, and flagged that one test question took 153 seconds because the first Gemini model failed and the chain fell back. That's a deployment problem (cache pre-warming and model order), not a video one.
+
+  ## SC1 · Study Coach core
+
+**What it does:** Keeps an estimate, for each syllabus topic, of how likely it is that the student knows it: `p_known`, a number from 0 to 1. It learns from quiz answers and ticked checkboxes, uses the student's chat questions to decide which weak topic to suggest first, and lets knowledge fade slowly when a topic isn't practised. From that it answers two questions: "which topics need work?" (at most three, foundations first) and "how am I doing?" (a value and a label per topic: not started, learning or mastered). It does all this only when the student has switched Study Coach on. This task is the core logic only: pure Python with an in-memory store. The Firestore store and the endpoints come later, built against the same interface.
+
+**Data flow:**
+- `record_quiz_answer(storage, nb, uid, topic_id=…, attempt_id=…, question_type=…, score=…, coach_on=…, now=…)`:
+  1. Every argument is checked first (IDs, time, flags, score, question type). A bad one raises `CoachInputError`, with a message such as `invalid score: …`, before anything is read or written.
+  2. The topic must exist (`unknown topic:`). With Study Coach off, it returns `coach_off` and writes nothing; for "Other material", it returns `ignored_other`.
+  3. One atomic storage call, `update_mastery`, does the rest. If an event with ID `qa_{attempt_id}` already exists, this is a retry: it returns `duplicate` and changes nothing. Otherwise it reads the stored record, lets it fade to now, applies one Bayesian Knowledge Tracing step, and writes the new record and the `qa_` event together.
+- The BKT step (`bkt.update`): the probability first updates on the evidence, allowing for a lucky guess (25% for multiple choice, 10% for short answer, 5% for numerical) and a careless slip (10%). Then it adds the chance of having learned from the question (15%). From the starting value of 0.3, one correct multiple-choice answer gives 0.666, and one correct numerical answer gives 0.902.
+- Forgetting (`bkt.decay`): the part above 0.3 halves every 14 days. A value at or below 0.3 never moves. Forgetting is applied whenever mastery is read and is never stored.
+- `record_checkbox`: a tick lifts the topic to at least 0.8, after forgetting. An untick lowers nothing and only logs an event.
+- `record_chat_signal`: stores a `cs_{message_id}` event and never touches `p_known`.
+- `get_topics_needing_work`: the candidates are non-mastered topics (below 0.7 after forgetting). Each is ranked by its value minus 0.05 per chat question about it in the last 14 days (counting at most 3). A topic is never listed before its own weak prerequisites. With Study Coach off, it lists the unticked topics in syllabus order instead.
+- `get_progress`: per topic, the ticked state plus `p_known`, `n_obs`, `last_updated` and the label. With Study Coach off, only the ticked state.
+
+**Main files:**
+- `backend/app/coach/bkt.py`: the fixed parameters and the pure maths (`posterior`, `learn`, `update`, `decay`, `is_correct`, `label`). No input/output and no clock.
+- `backend/app/coach/types.py`: strict, frozen Pydantic models (`MasteryRecord`, `CoachEvent`, `RecordResult`, `Progress`, `NeedsWork`, …) and `CoachInputError`.
+- `backend/app/coach/storage.py`: the `CoachStorage` interface (six methods, including the atomic `update_mastery`) and `InMemoryCoachStorage`, which uses one lock.
+- `backend/app/coach/core.py`: the five calls, the validation and the needs-work ordering.
+- `backend/app/coach/__init__.py`: the only public entry point (the module is sealed).
+- `backend/tests/test_coach_core.py`: over 160 tests, running in a few seconds.
+
+**A judge might ask… / my answer:**
+- *Why Bayesian Knowledge Tracing instead of a percentage correct?* A percentage treats a lucky guess on a 4-option question the same as a worked numerical answer, and it never changes once the quizzes stop. BKT models guessing, slips, learning and (with our decay) forgetting, and each update is one line of maths a judge can check by hand.
+- *Why does a tick count for so much?* The student is telling us they know the topic, so it lifts the topic to at least 0.8, which is just above the 0.7 needed for "mastered". It still fades: after about 4.5 days without practice, a ticked topic shows "learning" again. That's deliberate, because the tick is the student's claim and mastery is the coach's estimate.
+- *What if the same answer arrives twice, for example when the network retries?* Each answer carries its attempt ID. The storage checks for the `qa_` marker and writes the new mastery in one atomic step, so a retry is recognised and changes nothing. That holds even when 16 copies arrive at the same instant: exactly one is applied.
+- *What if two different answers arrive at once?* Each one reads, updates and writes inside the same atomic step (a lock in memory, a transaction in Firestore), so neither overwrites the other. 16 simultaneous answers give exactly the result of applying them one by one.
+- *Why don't chat questions change mastery?* Asking about Bayes' rule doesn't show whether you know it. It only suggests the topic might be shaky, so questions only move a topic up the needs-work list, and never make a mastered topic "need work".
+- *Why foundations first?* Drilling conditional probability while the axioms are shaky wastes the quiz. Prerequisites are followed through the whole syllabus, and a cycle in bad data can't make the ordering loop forever.
+- *What happens with Study Coach off?* Nothing is recorded, and progress shows only the checkboxes. "Needs work" becomes "the topics you haven't ticked".
+- *How was it tested?* With no Gemini, no Firestore and a fake clock. Exact fractions confirm every hand-computed value. Threads hammer the store to check the lock. A 2,000-step fixed-seed random run checks every update against the formula. A syntax-tree scan proves no other part of the app reaches into the module. Then **mutation testing** checked the tests themselves: 22 deliberate bugs were planted in copies of the code, one at a time, and every one makes at least one test fail.
+- *What went wrong while building it?*
+  - The design review found a half-write: a failed update left an empty record behind. It also found that an attempt ID ending in a newline would pass the check and count twice.
+  - Gemini's 47 KB plan file drifted into two contradictory designs after several rounds of patches. It also lost every non-ASCII character when saved on Windows. The plan was retired and the code built directly from the reviewed spec; every SC1 file is now ASCII-only, with a test that enforces it.
+  - My own spec had a bug in the cycle rule that would have stopped the fallback from ever firing. The recheck caught it.
+  - The first test suite passed all 161 tests but let 17 of 22 planted bugs through. Targeted tests closed every one.
+- *Known limits?* The store is in memory; the Firestore version is a separate task against the same interface. The seal scan doesn't catch `importlib` tricks. And the parameters are fixed textbook-style values, not fitted to real students.

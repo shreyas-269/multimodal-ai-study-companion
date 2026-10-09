@@ -39,7 +39,7 @@
 | `.../chats/{chat}/messages/{msg}` | A Message (below). Stores retrieved chunk IDs and scores, not chunk text |
 | `.../members/{uid}/quizzes/{quiz}` | mode (adaptive / chosen / diagnostic), topic_ids, question_ids, position, status, score, report, created_at |
 | `.../members/{uid}/attempts/{a}` | question_id, quiz_id, topic_id, type, answer, correct, score (0–1), time_ms, created_at |
-| `.../members/{uid}/mastery/{topic_id}` | p_known, n_obs, last_updated. Written only by the Study Coach |
+| `.../members/{uid}/coach_events/{e}` | kind (quiz_answer / chat_signal / checkbox), topic_id, value (quiz_answer: the score 0–1; chat_signal: 1; checkbox: 1 tick, 0 untick), created_at. Written only by the Study Coach. IDs: `qa_{attempt_id}` and `cs_{message_id}` are dedupe markers (the qa_ one is written in the same transaction as the mastery update); checkbox events use auto-IDs |
 | `.../members/{uid}/coach_events/{e}` | kind (chat_signal / checkbox), topic_id, value, created_at. Written only by the Study Coach |
 
 ## Collections: top level
