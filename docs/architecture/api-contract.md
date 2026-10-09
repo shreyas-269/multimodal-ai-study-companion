@@ -92,6 +92,14 @@ response: { user_message: Message, assistant_message: Message }   # assistant_me
 # sorted by order; no paging parameters; readable by the owner, or anyone for the demo notebook
 ```
 
+**Topic sources** (`GET /v1/notebooks/{nb}/topics/{t}/sources`, operation ID `topics_list_sources`; the topic list's operation ID is `topics_list`)
+
+```text
+{ items: [Citation], next_cursor: null }
+# one Citation per stored location (page, slide or 5-minute video window), built by build_citation;
+# a topic ID that isn't t1–t6 or other, or doesn't exist → 404; student notebooks have no topics
+```
+
 **Quiz question** (as sent to the student; answer keys never leave the backend before answering)
 
 ```text

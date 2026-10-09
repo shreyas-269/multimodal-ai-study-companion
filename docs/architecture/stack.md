@@ -14,8 +14,8 @@
 | PDF | PyMuPDF 1.28 (`import pymupdf`) | Text, blocks with bboxes, drawings, images, page rendering |
 | PPTX / DOCX → PDF | LibreOffice headless | Installed on the laptop; in the backend image only if PPTX/DOCX upload is built |
 | Embeddings | fastembed, model `BAAI/bge-small-en-v1.5` | 384 dimensions, ONNX (no PyTorch). Same model for indexing and queries |
-| Transcription | faster-whisper | Laptop only, in the `laptop` dependency group; not in the Docker image |
-| Keyframes | ffmpeg scene filter | Laptop only |
+| Transcription | faster-whisper (medium.en, CPU, int8) | Laptop only, in the `laptop` dependency group with `av>=16,<19` (av 19 breaks decode_audio); not in the Docker image |
+| Keyframes | ffmpeg scene filter | Laptop only; not built in v1 (I3c, a Should) |
 | Syllabus parsing | markdown-it-py | |
 | Numerical verification | Python standard library | `fractions.Fraction`, an `ast` whitelist, a subprocess with a timeout |
 | Backend quality | pytest, httpx, ruff | |

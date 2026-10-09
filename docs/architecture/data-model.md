@@ -14,9 +14,10 @@
 | --- | --- |
 | Users | Firebase Auth UID |
 | Demo notebook | `nb_demo_6041` (fixed) |
+| Demo-notebook sources | `src_` + the file's lower-cased stem, other characters → `_` (`src_l02_slides`, `src_textbook`, `src_l02`) |
 | Other notebooks, sources, questions, chats, messages, quizzes, attempts | Firestore auto-IDs |
 | Chunks | `{source_id}-{seq:05d}` (deterministic) |
-| Topics | The six syllabus topics, with IDs seeded deterministically from syllabus.md (S4); the "Other material" topic is `other`. Never regenerated |
+| Topics | `t1`–`t6` from the topic number in syllabus.md, plus `other`. Never regenerated |
 
 ## Collections: shared content
 
@@ -25,8 +26,8 @@
 | `users/{uid}` | email, display_name, is_guest, study_coach (true / false / null = not asked yet), format {custom_instructions}, created_at |
 | `notebooks/{nb}` | name, owner_uid, is_demo, status (empty / processing / ready), sources_summary [{source_id, ref_n, title, kind, status}] (stored twice so the notebook page loads in one read), counts {chunks, items, questions_verified}, created_at |
 | `notebooks/{nb}/sources/{src}` | ref_n (the n in `@n`), title, kind (pdf / slides_pdf / pptx / docx / video / markdown), role (content / syllabus), filename, storage_path, viewer_path (the PDF the viewer opens: the original for PDFs, the converted file for PPTX/DOCX), youtube_id, offset_s, duration_s, page_count, page_labels [str or null, one per page], slide_grid ("2x2" etc. or null), licence_pages [page numbers], licence, attribution, status (processing / ready / failed), stage, error, ingest_version, created_at |
-| `notebooks/{nb}/topics/{topic}` | name, order, prerequisite_ids [], summary, is_other, locations [Location] (the Sources button; stored twice), location_count |
-| `notebooks/{nb}/chunks/{chunk}` | source_id, kind (text / transcript / figure / keyframe), text (for figures and keyframes, the vision description), loc (Location), topic_id, embedding (vector, 384 dimensions), token_count, image_path |
+| `notebooks/{nb}/topics/{topic}` | name, order, prerequisite_ids [], summary, is_other, locations [{chunk_id, loc}] (the Sources button: one per page, slide or 5-minute video window; stored twice), location_count (the number of locations) |
+| `notebooks/{nb}/chunks/{chunk}` | source_id, kind (text / transcript / figure / keyframe), text (for figures and keyframes, the vision description), loc (Location), topic_id, embedding (vector, 384 dimensions), token_count, image_path, segments [{start, end, text}] (transcript chunks only; internal, never returned by the API) |
 | `notebooks/{nb}/questions/{q}` | type (mcq / short / numerical), topic_id, difficulty (1–3), stem, options [{id, text, misconception or null}], answer ({option_id} or {value: "3/8"} or {model_answer}), rubric [{point, chunk_id}], explanation, citations [Citation], verification {method, passed, detail}, status (verified / rejected), batch_id, created_at |
 
 ## Collections: private learner state
@@ -101,10 +102,10 @@ The backend builds `open`; the frontend never builds a link. A YouTube `url` is 
 
 | Source | Label |
 | --- | --- |
-| Textbook | `Grinstead & Snell p. 133 (§4.1)` (printed page; physical page if no label) |
-| Slide handout | `L03 slides, p. 2 (slide 5)` |
-| Recitation | `R03 solutions, p. 2` |
-| Video | `L03 lecture, 12:34` |
+| Textbook | `Grinstead & Snell p. 133` (printed page; physical page if no label; no § section in v1) |
+| Slide handout | `L03 slides p. 2 (slide 5)` |
+| Recitation | `R03 solutions p. 2` |
+| Video | `L03 lecture, 12:34` (for /ask, the start is refined to the best-matching segments) |
 | Converted PPTX | `<title>, slide 4` |
 
 Licence and terms pages are never cited.

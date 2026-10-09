@@ -50,6 +50,8 @@ Columns added in S4:
 
 - `source_url`: where the file was downloaded from, for `backend/scripts/fetch_course.py`.
 - `slide_grid`: `2x2` for L01–L06 slides; empty for everything else.
+- `topics`: one topic ID for a lecture's files (slides, video, recitation, solutions); physical page ranges for textbook.pdf: `2-24=t1;25-69=t4;70-74=t2;75=t2|t3;76-82=t3;83-85=t2;86-99=t2|t3;100-101=t5|t6;102-121=t6;122-136=t5;137=t5|t6;138-139=t6;140-154=t5|t6;155-165=t5` (`a|b` pages are split per chunk by embedding similarity); empty for syllabus.md.
+- The three columns were added on 9 Oct (backup: `manifest.backup-2026-10-09.csv`); `source_url` stays empty until S11.
 
 ## Textbook page labels
 
@@ -91,8 +93,9 @@ Findings from checking the frames with PyMuPDF:
 
 ## Licence and terms pages
 
-- The last page of every slide deck is MIT OCW's terms page (it starts "MIT OpenCourseWare / http://ocw.mit.edu / 6.041 / 6.431 …"). The recitations probably end with the same page.
+- The last page of every slide deck is MIT OCW's terms page (it starts "MIT OpenCourseWare / http://ocw.mit.edu / 6.041 / 6.431 …"). The recitations end with the same page (confirmed in S4: one licence page each, always the last).
 - Textbook page 1 is the GFDL notice.
+- Every lecture video opens with a spoken Creative Commons preamble (about 10–34 s); it is dropped before indexing.
 - These are detected by their text (`ocw.mit.edu/terms`, the GFDL notice), recorded in the source's `licence_pages`, and excluded from retrieval and citations.
 
 ## Recitations
