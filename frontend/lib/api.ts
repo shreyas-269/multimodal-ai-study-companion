@@ -271,8 +271,9 @@ export async function ask(
     {
       method: "POST",
       body,
-      signal: AbortSignal.timeout(150000),
-      timeoutMessage: "The answer took too long. Try again.",
+      signal: AbortSignal.timeout(180000),
+      timeoutMessage:
+        "The AI model is slow right now. Try again in a minute; if it finished in the background, the answer often comes back straight away.",
     }
   );
 }

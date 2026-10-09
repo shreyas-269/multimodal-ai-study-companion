@@ -1,5 +1,6 @@
 "use client";
 
+import { FileText, Play, ExternalLink } from "lucide-react";
 import type { components } from "@/lib/api-types";
 import { useViewer } from "@/components/viewer-context";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -31,7 +32,8 @@ export function CitationChip({ citation, title }: CitationChipProps) {
         }
         className="text-xs"
       >
-        {citation.label}
+        <FileText className="h-3 w-3 shrink-0" aria-hidden="true" />
+        <span>{citation.label}</span>
       </Button>
     );
   }
@@ -42,9 +44,12 @@ export function CitationChip({ citation, title }: CitationChipProps) {
         href={open.url}
         target="_blank"
         rel="noopener noreferrer"
+        aria-label={`${citation.label} (opens YouTube in a new tab)`}
         className={buttonVariants({ variant: "outline", size: "sm" }) + " text-xs"}
       >
-        {citation.label}
+        <Play className="h-3 w-3 shrink-0" aria-hidden="true" />
+        <span>{citation.label}</span>
+        <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
       </a>
     );
   }

@@ -5,6 +5,7 @@ import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
 import { CitationChip } from "@/components/citation-chip";
+import { formatCitationTime } from "@/lib/format";
 import type { AskResponse } from "@/lib/api";
 
 /**
@@ -93,14 +94,29 @@ export function AnswerView({ response, sourceMap }: AnswerViewProps) {
           </summary>
           <div className="mt-2 space-y-2 pl-2 border-l">
             {response.context.map((chunk, idx) => {
-              const pageStr =
-                chunk.loc.page != null ? `p. ${chunk.loc.page}` : "p. N/A";
-              const scoreStr = chunk.score.toFixed(2);
+              const isVideo =
+                chunk.loc.t_start_s != null && chunk.loc.page == null;
+              let locLabel: string;
+              if (isVideo) {
+                const title =
+                  (chunk.loc.source_id
+                    ? sourceMap.get(chunk.loc.source_id)
+                    : undefined) || "Lecture video";
+                const timeStr = formatCitationTime(chunk.loc.t_start_s!);
+                locLabel = `${title}, ${timeStr}`;
+              } else {
+                locLabel =
+                  chunk.loc.page != null ? `p. ${chunk.loc.page}` : "p. N/A";
+              }
+              const scoreStr =
+                typeof chunk.score === "number" && !isNaN(chunk.score)
+                  ? chunk.score.toFixed(2)
+                  : "0.00";
               const previewText = chunk.text.slice(0, 200);
               return (
                 <div key={chunk.chunk_id || `chunk-${idx}`} className="space-y-0.5">
                   <div className="font-mono text-[11px] text-foreground">
-                    [{pageStr}, score: {scoreStr}]
+                    [{locLabel}, score: {scoreStr}]
                   </div>
                   <p className="text-muted-foreground line-clamp-3">
                     {previewText}

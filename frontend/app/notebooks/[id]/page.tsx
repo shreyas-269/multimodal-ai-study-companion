@@ -54,7 +54,7 @@ function formatAskError(err: unknown): string {
       return "The AI model is busy. Try again in a minute.";
     }
     if (err.code === "timeout") {
-      return err.message;
+      return "The AI model is slow right now. Try again in a minute; if it finished in the background, the answer often comes back straight away.";
     }
     return err.message;
   }
@@ -88,6 +88,7 @@ function NotebookContent() {
   const [question, setQuestion] = useState("");
   const [allowOutside, setAllowOutside] = useState(false);
   const [answers, setAnswers] = useState<AnswerItem[]>([]);
+  const [isLongWait, setIsLongWait] = useState(false);
 
   const notebookQuery = useQuery({
     queryKey: ["notebook", user?.uid, id],
@@ -135,6 +136,12 @@ function NotebookContent() {
   const askMutation = useMutation({
     mutationFn: (data: AskRequest) => ask(id, data),
     retry: false,
+    onMutate: () => {
+      setIsLongWait(false);
+    },
+    onSettled: () => {
+      setIsLongWait(false);
+    },
     onSuccess: (response, variables) => {
       setAnswers((prev) => [
         {
@@ -147,6 +154,18 @@ function NotebookContent() {
       setQuestion("");
     },
   });
+
+  useEffect(() => {
+    if (!askMutation.isPending) return;
+
+    const timer = setTimeout(() => {
+      setIsLongWait(true);
+    }, 15000);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [askMutation.isPending]);
 
   const navKey = viewerSource?.navKey;
   useEffect(() => {
@@ -223,7 +242,19 @@ function NotebookContent() {
   };
 
   const sources = sourcesQuery.data?.pages.flatMap((page) => page.items) ?? [];
-  const sourceMap = new Map(sources.map((s) => [s.id, s.title]));
+  const sourceMap = new Map<string, string>();
+  if (notebook.sources_summary) {
+    for (const s of notebook.sources_summary) {
+      if (s.source_id && s.title) {
+        sourceMap.set(s.source_id, s.title);
+      }
+    }
+  }
+  for (const s of sources) {
+    if (s.id && s.title) {
+      sourceMap.set(s.id, s.title);
+    }
+  }
   const hasReadySource = sources.some((s) => s.status === "ready");
 
   const handleAskSubmit = (e?: React.FormEvent) => {
@@ -233,6 +264,7 @@ function NotebookContent() {
     const trimmed = question.trim();
     if (!trimmed || trimmed.length > 2000) return;
 
+    setIsLongWait(false);
     askMutation.mutate({
       question: trimmed,
       allow_outside: allowOutside,
@@ -429,7 +461,9 @@ function NotebookContent() {
 
                 {askMutation.isPending && (
                   <p className="text-sm text-muted-foreground">
-                    Thinking… this usually takes a few seconds, sometimes up to a minute or two.
+                    {isLongWait
+                      ? "Still working. The AI model is busy, so this can take up to three minutes."
+                      : "Thinking… this usually takes a few seconds, sometimes up to a minute or two."}
                   </p>
                 )}
 

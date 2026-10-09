@@ -1,4 +1,5 @@
 import type { SourceItem } from "@/lib/api";
+import { formatDuration } from "@/lib/format";
 import { Card } from "@/components/ui/card";
 import { Button, buttonVariants } from "@/components/ui/button";
 
@@ -13,16 +14,6 @@ const KIND_LABELS: Record<SourceItem["kind"], string> = {
   xlsx: "Excel",
   web: "Website",
 };
-
-function formatDuration(durationS: number): string {
-  const totalMinutes = Math.max(1, Math.round(durationS / 60));
-  if (totalMinutes < 60) {
-    return `${totalMinutes} min`;
-  }
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  return `${hours} h ${minutes} min`;
-}
 
 function getStatusText(source: SourceItem): string | null {
   if (source.status === "ready") {
