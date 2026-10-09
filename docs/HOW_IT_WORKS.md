@@ -471,3 +471,25 @@ Template for each feature:
   - Before that was caught, a formatter had been run across the whole backend and silently rewrapped 15 committed files from other tasks; a line-ending-insensitive diff found them, and they were restored from git. Agents now never run formatters.
   - The plan review found the chapter-4 topic map off by two pages, a chunk count that would have doubled on every re-run, and tests that would have overwritten the shared demo notebook. All were fixed in the plan.
   - The verify found that the script only worked when run as a module, and that one older test assumed no demo notebook exists. Both were fixed and re-verified.
+
+  ---
+
+## F2c · Topic list and per-topic Sources
+
+**What it does:** The top of a notebook's left panel lists the course's six syllabus topics in order, each with what it builds on ("Builds on: Probability models and axioms, Counting") and a Sources button with a count. Clicking Sources opens that topic and shows every place in the course where it's taught (textbook pages, individual slides, recitation pages and, once videos are ingested, lecture moments), as the same citation buttons answers use. Clicking one opens the PDF at that page, outlining the exact slide when it's a slide handout, or opens the lecture on YouTube at that moment. A student's own uploads appear under "Other material" at the bottom.
+
+**Data flow:** notebook page loads → `TopicList` (given the user's uid by the page) runs `listTopics()` in `lib/api.ts` → `GET /v1/notebooks/{nb}/topics` → the six topics plus "Other material", sorted by order, with prerequisite IDs and location counts → prerequisite names are looked up in the same list. Sources click → `listTopicSources()` → `GET /v1/notebooks/{nb}/topics/{t}/sources` → Citations built by the same backend function as `/ask` → de-duplicated by label → `CitationChip` for each, 20 at a time with "Show all". Both queries are keyed by user, notebook (and topic) and never go stale on their own, because topic data changes only when someone uploads. The page invalidates them after every upload, so a new upload's "Other material" entry appears without a reload.
+
+**Main files:**
+- `frontend/components/topic-list.tsx`: the list, the expand/collapse, de-duplication and "Show all".
+- `frontend/lib/api.ts`: `listTopics()` and `listTopicSources()`, typed by the generated operation IDs.
+- `frontend/app/notebooks/[id]/page.tsx`: mounts the list and refreshes it after uploads.
+- `frontend/components/citation-chip.tsx`: unchanged; the same chip answers use.
+
+**A judge might ask… / my answer:**
+- *Why show the topics at all, when I can just ask?* Students don't always know what to ask. The topic list is the course's spine: it shows what comes first, what each topic builds on, and where each one is taught across the textbook, slides, recitations and lectures. It's also where Study Coach's checkboxes and progress attach next.
+- *Are the Sources citations the same as in answers?* Yes, byte for byte. The backend builds both with one function, and the frontend renders both with one component, so labels, page links and the slide highlight are identical everywhere.
+- *Why load a topic's sources only when you open it?* Most students open one or two topics per visit; fetching all six up front would be wasted requests. Once opened, a topic's list stays cached for the visit, so reopening it is instant.
+- *Why remove duplicate labels?* The backend tags topics per passage, and one page can hold several passages, which would show as two identical "p. 72" buttons. Different slides on the same handout page have different labels ("slide 5", "slide 6"), so they stay separate.
+- *Why does "Other material" sometimes not appear?* It only appears once something is in it, a student's own upload. An empty row would look like something failed to load.
+- *How does it fit a narrow panel?* Long topic names and citation labels wrap instead of overflowing, and on a phone the whole panel stacks above the answers.
