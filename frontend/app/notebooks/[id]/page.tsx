@@ -23,6 +23,7 @@ import {
 } from "@/lib/api";
 import { ViewerProvider, useViewer } from "@/components/viewer-context";
 import { SourceCard } from "@/components/source-card";
+import { TopicList } from "@/components/topic-list";
 
 const PdfViewer = dynamic(
   () => import("@/components/pdf-viewer").then((mod) => mod.PdfViewer),
@@ -109,6 +110,8 @@ function NotebookContent() {
         queryClient.invalidateQueries({ queryKey: ["sources", user.uid, id] });
         queryClient.invalidateQueries({ queryKey: ["notebook", user.uid, id] });
         queryClient.invalidateQueries({ queryKey: ["notebooks", user.uid] });
+        queryClient.invalidateQueries({ queryKey: ["topics", user.uid, id] });
+        queryClient.invalidateQueries({ queryKey: ["topic-sources", user.uid, id] });
       }
     },
     onSuccess: (data) => {
@@ -269,6 +272,7 @@ function NotebookContent() {
           className="space-y-6 p-4 lg:w-72 lg:shrink-0 lg:overflow-y-auto lg:border-r"
         >
           {/* F2: the flat topic list goes here, above Sources */}
+          <TopicList notebookId={id} uid={user.uid} />
 
           <section className="space-y-3">
             <div className="flex items-center gap-2">

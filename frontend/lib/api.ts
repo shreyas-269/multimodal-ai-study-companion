@@ -10,9 +10,13 @@ export type NotebookCreateResponse = operations["notebooks_create"]["responses"]
 export type NotebookResponse = operations["notebooks_get"]["responses"][200]["content"]["application/json"];
 export type SourceListResponse = operations["sources_list"]["responses"][200]["content"]["application/json"];
 export type SourceCreateResponse = operations["sources_create"]["responses"][202]["content"]["application/json"];
+export type TopicListResponse = operations["topics_list"]["responses"][200]["content"]["application/json"];
+export type TopicSourceListResponse = operations["topics_list_sources"]["responses"][200]["content"]["application/json"];
 
 export type NotebookItem = NotebookListResponse["items"][number];
 export type SourceItem = SourceListResponse["items"][number];
+export type TopicListItem = TopicListResponse["items"][number];
+export type Citation = components["schemas"]["Citation"];
 export type SourceRole = components["schemas"]["Body_sources_create"]["role"];
 
 export class ApiError extends Error {
@@ -204,6 +208,22 @@ export async function uploadSource(
       timeoutMessage: "Processing took longer than 3 minutes. Check the sources list in a minute; it may still finish.",
     }
   );
+}
+
+export async function listTopics(notebookId: string): Promise<TopicListResponse> {
+  return apiFetch<TopicListResponse>(
+    `/v1/notebooks/${encodeURIComponent(notebookId)}/topics`
+  );
+}
+
+export async function listTopicSources(
+  notebookId: string,
+  topicId: string
+): Promise<Citation[]> {
+  const data = await apiFetch<TopicSourceListResponse>(
+    `/v1/notebooks/${encodeURIComponent(notebookId)}/topics/${encodeURIComponent(topicId)}/sources`
+  );
+  return data.items;
 }
 
 /**
