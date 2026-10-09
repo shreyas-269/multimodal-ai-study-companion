@@ -774,3 +774,96 @@ def test_ask_chunk_without_page_produces_no_citation(
     p = res.json()["paragraphs"][0]
     assert len(p["citations"]) == 0
     assert p["outside_course"] is True
+
+
+def test_ask_video_chunk_retention_and_youtube_citation(mock_gemini_client):
+    """Verify video chunk with t_start_s is retained and produces youtube citation."""
+    uid, token = create_emulator_user()
+    nb_id = create_test_notebook(token)
+    db = get_db()
+
+    src_id = f"src_vid_{uuid4().hex[:6]}"
+    # Seed video source
+    db.document(f"notebooks/{nb_id}/sources/{src_id}").set({
+        "ref_n": 1,
+        "title": "Lecture 2: Conditioning",
+        "kind": "video",
+        "role": "content",
+        "filename": "L02.mp4",
+        "storage_path": "",
+        "viewer_path": None,
+        "youtube_id": "yt_video_123",
+        "offset_s": 0.0,
+        "duration_s": 1800.0,
+        "status": "ready",
+        "ingest_version": 1,
+        "created_at": datetime.now(UTC),
+    })
+
+    db.document(notebook_path(nb_id)).update({
+        "sources_summary": [{
+            "source_id": src_id,
+            "ref_n": 1,
+            "title": "Lecture 2: Conditioning",
+            "kind": "video",
+            "status": "ready",
+        }],
+        "status": "ready",
+        "counts": {"chunks": 1},
+    })
+
+    c_id = f"{src_id}-00000"
+    db.document(chunk_path(nb_id, c_id)).set({
+        "source_id": src_id,
+        "kind": "transcript",
+        "text": "Discussion on radar detection example.",
+        "loc": {
+            "source_id": src_id,
+            "page": None,
+            "t_start_s": 120.0,
+            "t_end_s": 180.0,
+        },
+        "topic_id": "t2",
+        "embedding": Vector(embed_passages(["Discussion on radar detection example."])[0]),
+        "token_count": 6,
+        "segments": [
+            {"start": 120.0, "end": 150.0, "text": "Discussion on"},
+            {"start": 150.0, "end": 180.0, "text": "radar detection example."},
+        ],
+    })
+
+    mock_gemini_client.models.generate_content.side_effect = None
+    mock_gemini_client.models.generate_content.return_value = MagicMock(
+        text=json.dumps({
+            "paragraphs": [
+                {"text": "Radar detection example explanation.", "sources": [1]},
+            ]
+        })
+    )
+
+    res = client.post(
+        f"/v1/notebooks/{nb_id}/ask",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"question": f"Question video {uuid4().hex[:6]}?"},
+    )
+    assert res.status_code == 200
+    p = res.json()["paragraphs"][0]
+    assert len(p["citations"]) == 1
+    c = p["citations"][0]
+    assert c["open"]["kind"] == "youtube"
+    assert "https://www.youtube.com/watch?v=yt_video_123&t=" in c["open"]["url"]
+    assert "Lecture 2: Conditioning, " in c["label"]
+    assert p["outside_course"] is False
+
+
+def test_prompt_header_format_video():
+    """Verify video chunk format in build_contents and PROMPT_VERSION bump."""
+    from app.llm.prompts.ask import PROMPT_VERSION, build_contents
+
+    assert PROMPT_VERSION == "ask-v2"
+    contents = build_contents(
+        question="What is Bayes rule?",
+        chunks_data=[(1, "Lecture 2", None, "Sample text", 754.0)],
+    )
+    assert "Source: Lecture 2, at 12:34" in contents
+    assert "Page:" not in contents

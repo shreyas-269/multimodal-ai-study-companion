@@ -1,8 +1,11 @@
+import uuid
+
 import pytest
 from fastapi.testclient import TestClient
+from firebase_admin import firestore
 
 from app.chat.citations import build_citation
-from app.db import get_db
+from app.db import get_db, notebook_path
 from app.db.notebooks import create_notebook
 from app.db.topics import write_topics_batch
 from app.ingestion.syllabus import parse_syllabus
@@ -335,3 +338,82 @@ def test_topics_endpoint_and_sources(user_tracker, notebook_tracker):
     assert client.get(f"/v1/notebooks/{nb_id}/topics/t7/sources").status_code == 404
     assert client.get(f"/v1/notebooks/{nb_id}/topics/invalid!!/sources").status_code == 404
     assert client.get(f"/v1/notebooks/{nb_id}/topics/nonexistent/sources").status_code == 404
+
+
+def test_topics_sources_endpoint_video_youtube_citation(user_tracker, notebook_tracker):
+    """Verify topic Sources endpoint returns YouTube citation for video locations."""
+    uid, token = create_emulator_user(email="topics_vid@test.com")
+    user_tracker.append(uid)
+    client = TestClient(app, headers={"Authorization": f"Bearer {token}"})
+    nb_id = f"nb_test_topics_vid_{uuid.uuid4().hex[:8]}"
+    notebook_tracker.append(nb_id)
+    db = get_db()
+
+    vid_src_id = f"src_vid_{uuid.uuid4().hex[:6]}"
+    db.document(f"notebooks/{nb_id}/sources/{vid_src_id}").set({
+        "ref_n": 1,
+        "title": "Lecture 2 Video",
+        "kind": "video",
+        "role": "content",
+        "filename": "L02.mp4",
+        "storage_path": "",
+        "viewer_path": None,
+        "youtube_id": "yt_test_789",
+        "offset_s": 0.0,
+        "duration_s": 3000.0,
+        "status": "ready",
+        "ingest_version": 1,
+        "created_at": firestore.SERVER_TIMESTAMP,
+    })
+
+    db.document(notebook_path(nb_id)).set({
+        "name": "Topics Video Test NB",
+        "owner_uid": uid,
+        "is_demo": False,
+        "status": "ready",
+        "sources_summary": [
+            {
+                "source_id": vid_src_id,
+                "ref_n": 1,
+                "title": "Lecture 2 Video",
+                "kind": "video",
+                "status": "ready",
+            }
+        ],
+        "counts": {"chunks": 1},
+        "created_at": firestore.SERVER_TIMESTAMP,
+    })
+
+    loc = {
+        "source_id": vid_src_id,
+        "t_start_s": 250.0,
+        "t_end_s": 300.0,
+    }
+    topics = [
+        {
+            "id": "t2",
+            "name": "Conditioning",
+            "order": 2,
+            "summary": "Conditioning",
+            "prerequisite_ids": [],
+            "is_other": False,
+            "locations": [{"chunk_id": f"{vid_src_id}-00000", "loc": loc}],
+            "location_count": 1,
+        }
+    ]
+    write_topics_batch(nb_id, topics)
+
+    try:
+        res = client.get(f"/v1/notebooks/{nb_id}/topics/t2/sources")
+        assert res.status_code == 200
+        items = res.json()["items"]
+        assert len(items) == 1
+        cit = items[0]
+        assert cit["label"] == "Lecture 2 Video, 4:10"
+        assert cit["open"]["kind"] == "youtube"
+        assert cit["open"]["url"] == "https://www.youtube.com/watch?v=yt_test_789&t=250s"
+    finally:
+        try:
+            db.recursive_delete(db.document(notebook_path(nb_id)))
+        except Exception:
+            pass

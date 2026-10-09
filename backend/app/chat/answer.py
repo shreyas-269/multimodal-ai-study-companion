@@ -1,6 +1,11 @@
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 from app.chat.citations import build_citation
+from app.db.sources import get_sources_metadata_by_ids
+from app.embeddings import embed_passages
+from app.ingestion.topics import cosine_similarity
 from app.llm.generate import generate_json_with_model
 from app.llm.prompts.ask import PROMPT_VERSION, build_contents, build_system_instruction
 from app.models.citation import Citation, Paragraph
@@ -17,6 +22,45 @@ class AskGeminiOutput(BaseModel):
     paragraphs: list[RawParagraph] = Field(default_factory=list)
 
 
+def refine_video_citation_time(
+    p_text: str,
+    segments: list[dict[str, Any]],
+    default_t: float,
+    margin: float = 0.03,
+) -> float:
+    """Refine video citation start time using 2-segment sliding windows against citing paragraph.
+
+    Embeds the paragraph text and pairs of consecutive segments locally.
+    Sets start time to first start of earliest window within margin of best similarity.
+    Falls back to default_t on any error or empty segments.
+    """
+    if not segments:
+        return default_t
+
+    try:
+        if len(segments) == 1:
+            windows = [(float(segments[0]["start"]), str(segments[0].get("text", "")).strip())]
+        else:
+            windows = []
+            for i in range(len(segments) - 1):
+                t_start = float(segments[i]["start"])
+                txt1 = str(segments[i].get("text", "")).strip()
+                txt2 = str(segments[i + 1].get("text", "")).strip()
+                windows.append((t_start, f"{txt1} {txt2}"))
+
+        p_emb = embed_passages([p_text])[0]
+        w_texts = [w[1] for w in windows]
+        w_embs = embed_passages(w_texts)
+
+        sims = [cosine_similarity(p_emb, we) for we in w_embs]
+        best_sim = max(sims)
+        thresh = best_sim - margin
+        earliest_idx = next(i for i, s in enumerate(sims) if s >= thresh)
+        return windows[earliest_idx][0]
+    except Exception:
+        return default_t
+
+
 def answer_question(
     notebook: Notebook,
     question: str,
@@ -29,7 +73,8 @@ def answer_question(
         s = sources_by_id.get(c.source_id)
         s_title = s.title if s else c.source_id
         page = c.loc.page
-        chunks_data.append((idx, s_title, page, c.text))
+        t_start_s = c.loc.t_start_s
+        chunks_data.append((idx, s_title, page, c.text, t_start_s))
 
     system_instruction = build_system_instruction(allow_outside)
     contents = build_contents(question, chunks_data)
@@ -48,6 +93,14 @@ def answer_question(
         cache_key_parts=cache_key_parts,
     )
 
+    # Fetch video sources metadata once for video chunks
+    video_source_ids = {c.source_id for c in chunks if c.loc.t_start_s is not None}
+    video_meta = (
+        get_sources_metadata_by_ids(notebook.id, list(video_source_ids))
+        if video_source_ids
+        else {}
+    )
+
     paragraphs: list[Paragraph] = []
     for p_idx, raw_p in enumerate(llm_output.paragraphs, start=1):
         seen_numbers = set()
@@ -57,13 +110,41 @@ def answer_question(
                 continue
             seen_numbers.add(n)
             chunk = chunks[n - 1]
+
+            # Drop only chunks with NEITHER a page NOR a t_start_s
+            if chunk.loc.page is None and chunk.loc.t_start_s is None:
+                continue
+
             s = sources_by_id.get(chunk.source_id)
             s_title = s.title if s else chunk.source_id
-            citation = build_citation(
-                chunk_id=chunk.chunk_id,
-                loc=chunk.loc,
-                title=s_title,
-            )
+
+            if chunk.loc.t_start_s is not None:
+                src_meta = video_meta.get(chunk.source_id, {})
+                yt_id = src_meta.get("youtube_id")
+                offset_s = src_meta.get("offset_s")
+                if not yt_id:
+                    continue
+                refined_t = refine_video_citation_time(
+                    p_text=raw_p.text,
+                    segments=chunk.segments,
+                    default_t=chunk.loc.t_start_s,
+                    margin=0.03,
+                )
+                refined_loc = chunk.loc.model_copy(update={"t_start_s": refined_t})
+                citation = build_citation(
+                    chunk_id=chunk.chunk_id,
+                    loc=refined_loc,
+                    title=s_title,
+                    youtube_id=yt_id,
+                    offset_s=offset_s,
+                )
+            else:
+                citation = build_citation(
+                    chunk_id=chunk.chunk_id,
+                    loc=chunk.loc,
+                    title=s_title,
+                )
+
             if citation is not None:
                 citations.append(citation)
 

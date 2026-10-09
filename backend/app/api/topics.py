@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from app.api.access import get_readable_notebook
 from app.chat.citations import build_citation
+from app.db.sources import get_sources_metadata_by_ids
 from app.db.topics import get_topic_snapshot, list_topic_snapshots
 from app.models.citation import Location
 from app.models.notebook import Notebook
@@ -83,6 +84,22 @@ def list_topic_sources(
         if s.status == "ready"
     }
 
+    # If any location has video (t_start_s), fetch metadata
+    # for distinct video source IDs via get_all
+    video_source_ids = sorted(
+        {
+            loc_item.get("loc", {}).get("source_id")
+            for loc_item in locations
+            if loc_item.get("loc", {}).get("t_start_s") is not None
+            and loc_item.get("loc", {}).get("source_id") in source_titles
+        }
+    )
+    video_meta = (
+        get_sources_metadata_by_ids(nb, video_source_ids)
+        if video_source_ids
+        else {}
+    )
+
     citations = []
     for loc_item in locations:
         chunk_id = loc_item.get("chunk_id", "")
@@ -91,7 +108,21 @@ def list_topic_sources(
         if loc.source_id not in source_titles:
             continue
         title = source_titles[loc.source_id]
-        citation = build_citation(chunk_id=chunk_id, loc=loc, title=title)
+
+        if loc.t_start_s is not None:
+            meta = video_meta.get(loc.source_id, {})
+            yt_id = meta.get("youtube_id")
+            offset_s = meta.get("offset_s")
+            citation = build_citation(
+                chunk_id=chunk_id,
+                loc=loc,
+                title=title,
+                youtube_id=yt_id,
+                offset_s=offset_s,
+            )
+        else:
+            citation = build_citation(chunk_id=chunk_id, loc=loc, title=title)
+
         if citation is not None:
             citations.append(citation)
 

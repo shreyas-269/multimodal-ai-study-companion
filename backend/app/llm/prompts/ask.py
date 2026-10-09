@@ -1,4 +1,8 @@
-PROMPT_VERSION = "ask-v1"
+from typing import Any
+
+from app.chat.citations import format_citation_time
+
+PROMPT_VERSION = "ask-v2"
 
 
 def build_system_instruction(allow_outside: bool) -> str:
@@ -27,14 +31,25 @@ def build_system_instruction(allow_outside: bool) -> str:
     )
 
 
-def build_contents(question: str, chunks_data: list[tuple[int, str, int | None, str]]) -> str:
+def build_contents(question: str, chunks_data: list[tuple[Any, ...]]) -> str:
     blocks = []
-    for num, title, page, text in chunks_data:
-        page_str = f"Page: {page}" if page is not None else "Page: unknown"
+    for item in chunks_data:
+        num = item[0]
+        title = item[1]
+        page = item[2]
+        text = item[3]
+        t_start_s = item[4] if len(item) > 4 else None
+
+        if t_start_s is not None:
+            time_str = format_citation_time(t_start_s)
+            header = f"Source: {title}, at {time_str}"
+        else:
+            page_str = f"Page: {page}" if page is not None else "Page: unknown"
+            header = f"Source: {title}\n{page_str}"
+
         blocks.append(
             f"<<<SOURCE {num}>>>\n"
-            f"Source: {title}\n"
-            f"{page_str}\n"
+            f"{header}\n"
             "Content:\n"
             f"{text}\n"
             f"<<<END {num}>>>"

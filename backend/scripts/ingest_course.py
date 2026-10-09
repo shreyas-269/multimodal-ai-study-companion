@@ -27,6 +27,7 @@ from app.db import (  # noqa: E402
 )
 from app.db.notebooks import (  # noqa: E402
     DEMO_NOTEBOOK_ID,
+    derive_notebook_status,
     rebuild_notebook_status_and_summary,
     upsert_demo_notebook,
 )
@@ -46,6 +47,7 @@ from app.ingestion.topics import (  # noqa: E402
     parse_topics_column,
     resolve_chunk_topic,
 )
+from app.ingestion.video import ingest_video_source  # noqa: E402
 from app.storage import upload_bytes  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -219,18 +221,12 @@ def ingest_pdf_source(
         return False
 
 
-def ingest_video_stub(title: str, **_: Any) -> bool:
-    """Stub handler for video sources until I3b."""
-    print(f"  {title}: skipped (video, I3b)")
-    return True
-
-
 INGEST_DISPATCH: dict[str, Callable[..., bool]] = {
     "pdf": ingest_pdf_source,
     "slides_pdf": ingest_pdf_source,
     "markdown": ingest_syllabus_source,
     "syllabus": ingest_syllabus_source,
-    "video": ingest_video_stub,
+    "video": ingest_video_source,
 }
 
 
@@ -390,7 +386,7 @@ def ingest_course(
 
     # 4. Atomically set notebook summary, total chunks, and status
     total_chunks = len(all_chunks)
-    nb_status = "ready" if not any_failed else "failed"
+    nb_status = derive_notebook_status(sources_summary_list)
     rebuild_notebook_status_and_summary(
         nb=notebook_id,
         sources_summary=sources_summary_list,

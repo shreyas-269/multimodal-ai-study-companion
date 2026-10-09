@@ -106,3 +106,18 @@ def rebuild_notebook_status_and_summary(
             "status": status,
         }
     )
+
+
+def derive_notebook_status(sources_summary: list[dict[str, Any]]) -> str:
+    """Derive notebook status from source summaries using only NotebookStatus enum values.
+
+    Returns:
+        - "processing" if any source is "queued" or "processing"
+        - "ready" if any source is "ready"
+        - "empty" otherwise
+    """
+    if any(s.get("status") in ("queued", "processing") for s in sources_summary):
+        return "processing"
+    if any(s.get("status") == "ready" for s in sources_summary):
+        return "ready"
+    return "empty"

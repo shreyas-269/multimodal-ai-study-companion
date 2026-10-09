@@ -361,3 +361,53 @@ def set_source_ready(nb: str, source_id: str) -> None:
     src_ref = db.document(source_path(nb, source_id))
     src_ref.update({"status": "ready", "stage": "done"})
 
+
+def write_video_chunks_batch(
+    nb: str,
+    source_id: str,
+    chunks: list[dict[str, Any]],
+    embeddings: list[list[float]],
+) -> None:
+    """Write video transcript chunk documents with 384-d vectors and segments in batches."""
+    db = get_db()
+    batch_size = 500
+    for i in range(0, len(chunks), batch_size):
+        batch = db.batch()
+        chunk_slice = chunks[i : i + batch_size]
+        for seq_idx, chunk in enumerate(chunk_slice, start=i):
+            chunk_id = chunk.get("id") or f"{source_id}-{seq_idx:05d}"
+            ref = db.document(chunk_path(nb, chunk_id))
+            doc_data: dict[str, Any] = {
+                "source_id": source_id,
+                "kind": "transcript",
+                "text": chunk["text"],
+                "loc": chunk["loc"],
+                "topic_id": chunk.get("topic_id"),
+                "embedding": Vector(embeddings[seq_idx]),
+                "token_count": chunk.get("token_count", len(chunk["text"].split())),
+                "image_path": None,
+                "segments": chunk.get("segments", []),
+            }
+            batch.set(ref, doc_data)
+        batch.commit()
+
+
+def get_sources_metadata_by_ids(nb: str, source_ids: list[str]) -> dict[str, dict[str, Any]]:
+    """Fetch metadata for specified source IDs using db.get_all."""
+    if not source_ids:
+        return {}
+    db = get_db()
+    refs = [db.document(source_path(nb, sid)) for sid in source_ids]
+    snaps = db.get_all(refs)
+    result: dict[str, dict[str, Any]] = {}
+    for snap in snaps:
+        if snap.exists:
+            data = snap.to_dict() or {}
+            result[snap.id] = {
+                "title": data.get("title", snap.id),
+                "kind": data.get("kind", ""),
+                "youtube_id": data.get("youtube_id"),
+                "offset_s": data.get("offset_s"),
+            }
+    return result
+

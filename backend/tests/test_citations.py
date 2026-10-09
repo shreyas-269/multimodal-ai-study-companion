@@ -46,3 +46,44 @@ def test_build_citation_non_slide_drops_bbox():
     assert citation.label == "Doc p. 10"
     assert citation.open.page == 1
     assert citation.open.bbox is None
+
+
+def test_build_citation_video_under_hour():
+    loc = Location(source_id="src_l02", t_start_s=754.2, t_end_s=800.0)
+    citation = build_citation(
+        chunk_id="src_l02-00010",
+        loc=loc,
+        title="L02 lecture",
+        youtube_id="yt123",
+        offset_s=10.0,
+    )
+    assert citation is not None
+    assert citation.label == "L02 lecture, 12:34"
+    assert citation.open.kind == "youtube"
+    assert citation.open.url == "https://www.youtube.com/watch?v=yt123&t=764s"
+
+
+def test_build_citation_video_over_hour():
+    loc = Location(source_id="src_l03", t_start_s=3754.8, t_end_s=3800.0)
+    citation = build_citation(
+        chunk_id="src_l03-00050",
+        loc=loc,
+        title="L03 lecture",
+        youtube_id="yt456",
+        offset_s=0.0,
+    )
+    assert citation is not None
+    assert citation.label == "L03 lecture, 1:02:34"
+    assert citation.open.kind == "youtube"
+    assert citation.open.url == "https://www.youtube.com/watch?v=yt456&t=3754s"
+
+
+def test_build_citation_video_missing_youtube_id_returns_none():
+    loc = Location(source_id="src_l02", t_start_s=100.0)
+    citation = build_citation(
+        chunk_id="src_l02-00001",
+        loc=loc,
+        title="L02",
+        youtube_id=None,
+    )
+    assert citation is None
