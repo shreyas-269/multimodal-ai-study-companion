@@ -1,8 +1,9 @@
 from pydantic import BaseModel, Field
 
+from app.chat.citations import build_citation
 from app.llm.generate import generate_json_with_model
 from app.llm.prompts.ask import PROMPT_VERSION, build_contents, build_system_instruction
-from app.models.citation import Citation, OpenPdfTarget, Paragraph
+from app.models.citation import Citation, Paragraph
 from app.models.notebook import Notebook
 from app.retrieval.search import RetrievedChunk
 
@@ -56,31 +57,26 @@ def answer_question(
                 continue
             seen_numbers.add(n)
             chunk = chunks[n - 1]
-            if chunk.loc.page is None:
-                continue
             s = sources_by_id.get(chunk.source_id)
             s_title = s.title if s else chunk.source_id
-            page = chunk.loc.page
-            citations.append(Citation(
+            citation = build_citation(
                 chunk_id=chunk.chunk_id,
                 loc=chunk.loc,
-                label=f"{s_title} p. {page}",
-                open=OpenPdfTarget(
-                    kind="pdf",
-                    source_id=chunk.source_id,
-                    page=page,
-                    bbox=chunk.loc.bbox,
-                ),
-            ))
+                title=s_title,
+            )
+            if citation is not None:
+                citations.append(citation)
 
         outside_course = len(citations) == 0
-        paragraphs.append(Paragraph(
-            id=f"p{p_idx}",
-            section=None,
-            text=raw_p.text,
-            citations=citations,
-            outside_course=outside_course,
-            images=[],
-        ))
+        paragraphs.append(
+            Paragraph(
+                id=f"p{p_idx}",
+                section=None,
+                text=raw_p.text,
+                citations=citations,
+                outside_course=outside_course,
+                images=[],
+            )
+        )
 
     return paragraphs, model_name

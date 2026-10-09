@@ -26,7 +26,7 @@ def seed_demo_notebook(owner_uid: str = "seed-owner", name: str = "Demo Course")
         "is_demo": True,
         "status": "ready",
         "sources_summary": [],
-        "counts": {"chunks": 0, "items": 0, "questions_verified": 0},
+        "counts": {"chunks": 0, "questions_verified": 0},
         "created_at": firestore.SERVER_TIMESTAMP,
     }
     db.document(notebook_path(DEMO_NOTEBOOK_ID)).set(data)
@@ -59,7 +59,7 @@ def test_notebook_create_success(user_tracker, notebook_tracker):
     assert data["is_demo"] is False
     assert data["status"] == "empty"
     assert data["sources_summary"] == []
-    assert data["counts"] == {"chunks": 0, "items": 0, "questions_verified": 0}
+    assert data["counts"] == {"chunks": 0, "questions_verified": 0}
 
     # Verify created_at parses as UTC ISO 8601
     dt = datetime.fromisoformat(data["created_at"])
@@ -200,14 +200,15 @@ def test_notebook_pagination(user_tracker, notebook_tracker):
         created_ids.append(res.json()["id"])
         notebook_tracker.append(res.json()["id"])
 
-    # Page 1 with limit=2 (no demo seeded, so only owner's 2 items)
+    # Page 1 with limit=2 (filter demo if present)
     p1 = client.get("/v1/notebooks?limit=2", headers=headers)
     assert p1.status_code == 200
     p1_data = p1.json()
-    assert len(p1_data["items"]) == 2
+    owned = [i for i in p1_data["items"] if i["id"] != DEMO_NOTEBOOK_ID]
+    assert len(owned) == 2
     assert p1_data["next_cursor"] is not None
     next_cursor = p1_data["next_cursor"]
-    assert next_cursor == p1_data["items"][-1]["id"]
+    assert next_cursor == owned[-1]["id"]
 
     # Page 2 with cursor
     p2 = client.get(f"/v1/notebooks?limit=2&cursor={next_cursor}", headers=headers)
@@ -309,7 +310,7 @@ def test_get_owned_notebook_direct_calls(user_tracker, notebook_tracker, demo_no
         "is_demo": False,
         "status": "empty",
         "sources_summary": [],
-        "counts": {"chunks": 0, "items": 0, "questions_verified": 0},
+        "counts": {"chunks": 0, "questions_verified": 0},
         "created_at": firestore.SERVER_TIMESTAMP,
     })
     nb_a = nb_ref.id

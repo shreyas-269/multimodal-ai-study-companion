@@ -28,7 +28,6 @@ class Counts(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     chunks: int = 0
-    items: int = 0
     questions_verified: int = 0
 
 

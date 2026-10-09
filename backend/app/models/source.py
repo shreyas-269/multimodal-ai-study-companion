@@ -21,7 +21,7 @@ class Source(BaseModel):
     role: SourceRole
     filename: str
     storage_path: str
-    viewer_path: str
+    viewer_path: str | None = None
     youtube_id: str | None = None
     offset_s: float | None = None
     duration_s: float | None = None
@@ -56,7 +56,6 @@ class SourceOut(BaseModel):
     licence: str | None = None
     attribution: str | None = None
     youtube_url: str | None = None
-    job_id: str | None = None
 
     @classmethod
     def from_stored(cls, source: Any) -> "SourceOut":

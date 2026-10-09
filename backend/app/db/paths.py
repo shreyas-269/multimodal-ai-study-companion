@@ -46,3 +46,13 @@ def llm_cache_collection_path() -> str:
 def llm_cache_path(key: str) -> str:
     """Return Firestore document path for an LLM cache entry."""
     return f"llm_cache/{key}"
+
+
+def topics_collection_path(nb: str) -> str:
+    """Return Firestore collection path for a notebook's topics."""
+    return f"notebooks/{nb}/topics"
+
+
+def topic_path(nb: str, topic_id: str) -> str:
+    """Return Firestore document path for a topic."""
+    return f"notebooks/{nb}/topics/{topic_id}"

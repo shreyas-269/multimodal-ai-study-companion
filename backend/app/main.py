@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.api import ask, health, me, notebooks, sources
+from app.api import ask, health, me, notebooks, sources, topics
 from app.config import get_settings
 from app.llm import ModelUnavailable, QuotaExhausted, UnreadableOutput
 
@@ -155,4 +155,5 @@ v1_router.include_router(me.router)
 v1_router.include_router(notebooks.router)
 v1_router.include_router(sources.router)
 v1_router.include_router(ask.router)
+v1_router.include_router(topics.router)
 app.include_router(v1_router)

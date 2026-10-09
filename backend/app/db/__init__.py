@@ -11,6 +11,8 @@ from app.db.paths import (
     source_path,
     source_storage_original_pdf_path,
     sources_collection_path,
+    topic_path,
+    topics_collection_path,
     user_path,
 )
 
@@ -26,5 +28,7 @@ __all__ = [
     "source_path",
     "source_storage_original_pdf_path",
     "sources_collection_path",
+    "topic_path",
+    "topics_collection_path",
     "user_path",
 ]

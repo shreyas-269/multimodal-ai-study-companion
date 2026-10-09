@@ -27,7 +27,7 @@ from app.db.sources import (
     write_chunks_batch,
 )
 from app.embeddings import embed_passages
-from app.ingestion.pdf import extract_and_chunk_pdf
+from app.ingestion.pdf import parse_pdf
 from app.models.notebook import Notebook
 from app.models.source import SourceList, SourceOut
 from app.storage import get_object_size, stream_byte_range, stream_object, upload_bytes
@@ -86,20 +86,24 @@ def create(
         upload_bytes(storage_path, pdf_bytes)
 
         current_stage = "extract"
-        chunks, page_count = extract_and_chunk_pdf(pdf_bytes, source_id=source_id)
+        parsed = parse_pdf(pdf_bytes, source_id=source_id, slide_grid=None)
 
         current_stage = "embed"
-        texts = [c["text"] for c in chunks]
+        texts = [c["text"] for c in parsed.chunks]
         embeddings = embed_passages(texts)
 
         current_stage = "save"
-        write_chunks_batch(nb, source_id, chunks, embeddings)
+        write_chunks_batch(nb, source_id, parsed.chunks, embeddings)
 
         source_doc = finish_source_transaction(
             nb=nb,
             source_id=source_id,
-            page_count=page_count,
-            chunk_count=len(chunks),
+            page_count=parsed.page_count,
+            chunk_count=len(parsed.chunks),
+            page_labels=parsed.page_labels,
+            licence_pages=parsed.licence_pages,
+            slide_grid=None,
+            viewer_path=storage_path,
         )
         return SourceOut.from_stored(source_doc)
 
@@ -142,10 +146,7 @@ def list_sources(
 
     raw = list_sources_snapshots(nb=nb, limit=limit, cursor_snapshot=cursor_snapshot)
     has_more = len(raw) > limit
-    items = [
-        SourceOut.from_stored(doc)
-        for doc in raw[:limit]
-    ]
+    items = [SourceOut.from_stored(doc) for doc in raw[:limit]]
     next_cursor = raw[limit - 1].id if has_more else None
 
     return SourceList(items=items, next_cursor=next_cursor)
