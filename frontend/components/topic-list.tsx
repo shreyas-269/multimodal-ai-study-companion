@@ -2,13 +2,15 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { listTopics, listTopicSources, type TopicListItem } from "@/lib/api";
+import { listTopicSources, type TopicListItem } from "@/lib/api";
+import { useTopics } from "@/lib/use-topics";
 import { CitationChip, type Citation } from "@/components/citation-chip";
 import { Button } from "@/components/ui/button";
 
 export interface TopicListProps {
   notebookId: string;
   uid: string;
+  onQuiz?: (topicId: string) => void;
 }
 
 interface TopicItemRowProps {
@@ -20,6 +22,7 @@ interface TopicItemRowProps {
   showAllSources: boolean;
   onShowAllSources: () => void;
   topicNameMap: Map<string, string>;
+  onQuiz?: (topicId: string) => void;
 }
 
 function TopicItemRow({
@@ -31,6 +34,7 @@ function TopicItemRow({
   showAllSources,
   onShowAllSources,
   topicNameMap,
+  onQuiz,
 }: TopicItemRowProps) {
   const sourcesQuery = useQuery({
     queryKey: ["topic-sources", uid, notebookId, topic.id],
@@ -71,17 +75,31 @@ function TopicItemRow({
             </p>
           )}
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="h-7 px-2 text-xs shrink-0"
-          onClick={onToggleSources}
-          aria-expanded={isExpanded}
-          aria-controls={isExpanded ? `topic-sources-${topic.id}` : undefined}
-        >
-          Sources ({topic.location_count})
-        </Button>
+        <div className="flex items-center gap-1 shrink-0">
+          {onQuiz && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={() => onQuiz(topic.id)}
+              aria-label={`Quiz on ${topic.name}`}
+            >
+              Quiz
+            </Button>
+          )}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-7 px-2 text-xs"
+            onClick={onToggleSources}
+            aria-expanded={isExpanded}
+            aria-controls={isExpanded ? `topic-sources-${topic.id}` : undefined}
+          >
+            Sources ({topic.location_count})
+          </Button>
+        </div>
       </div>
 
       {isExpanded && (
@@ -135,15 +153,11 @@ function TopicItemRow({
   );
 }
 
-export function TopicList({ notebookId, uid }: TopicListProps) {
+export function TopicList({ notebookId, uid, onQuiz }: TopicListProps) {
   const [expandedTopicId, setExpandedTopicId] = useState<string | null>(null);
   const [showAllSources, setShowAllSources] = useState(false);
 
-  const topicsQuery = useQuery({
-    queryKey: ["topics", uid, notebookId],
-    queryFn: () => listTopics(notebookId),
-    staleTime: Infinity,
-  });
+  const topicsQuery = useTopics(notebookId, uid);
 
   const handleToggleSources = (topicId: string) => {
     setShowAllSources(false);
@@ -192,6 +206,7 @@ export function TopicList({ notebookId, uid }: TopicListProps) {
             showAllSources={showAllSources}
             onShowAllSources={() => setShowAllSources(true)}
             topicNameMap={topicNameMap}
+            onQuiz={onQuiz}
           />
         ))}
       </ul>

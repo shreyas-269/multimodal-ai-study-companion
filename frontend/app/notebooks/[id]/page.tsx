@@ -24,6 +24,8 @@ import {
 import { ViewerProvider, useViewer } from "@/components/viewer-context";
 import { SourceCard } from "@/components/source-card";
 import { TopicList } from "@/components/topic-list";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { QuizPanel } from "@/components/quiz/quiz-panel";
 
 const PdfViewer = dynamic(
   () => import("@/components/pdf-viewer").then((mod) => mod.PdfViewer),
@@ -82,8 +84,13 @@ function NotebookContent() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const viewerRef = useRef<HTMLElement>(null);
+  const centreRef = useRef<HTMLElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadMessage, setUploadMessage] = useState<string | null>(null);
+
+  const [activeTab, setActiveTab] = useState<"ask" | "quiz">("ask");
+  const [quizRequest, setQuizRequest] = useState<{ topicIds: string[]; nonce: number } | null>(null);
+  const [hasOpenedQuiz, setHasOpenedQuiz] = useState(false);
 
   const [question, setQuestion] = useState("");
   const [allowOutside, setAllowOutside] = useState(false);
@@ -304,7 +311,18 @@ function NotebookContent() {
           className="space-y-6 p-4 lg:w-72 lg:shrink-0 lg:overflow-y-auto lg:border-r"
         >
           {/* F2: the flat topic list goes here, above Sources */}
-          <TopicList notebookId={id} uid={user.uid} />
+          <TopicList
+            notebookId={id}
+            uid={user.uid}
+            onQuiz={(topicId) => {
+              setQuizRequest((prev) => ({ topicIds: [topicId], nonce: (prev?.nonce ?? 0) + 1 }));
+              setActiveTab("quiz");
+              setHasOpenedQuiz(true);
+              if (typeof window !== "undefined" && window.innerWidth < 1024) {
+                centreRef.current?.scrollIntoView({ behavior: "smooth" });
+              }
+            }}
+          />
 
           <section className="space-y-3">
             <div className="flex items-center gap-2">
@@ -394,132 +412,175 @@ function NotebookContent() {
           </section>
         </aside>
 
-        <section aria-label="Ask" className="min-w-0 flex-1 lg:overflow-y-auto">
-          <div className="mx-auto w-full max-w-3xl space-y-6 p-6">
-            <div className="space-y-1">
-              <h2 className="text-lg font-semibold">Ask your sources</h2>
-              <p className="text-xs text-muted-foreground">
-                Ask questions grounded directly in your uploaded materials.
-              </p>
+        <section
+          ref={centreRef}
+          aria-label="Ask and quiz"
+          className="min-w-0 flex-1 flex flex-col lg:min-h-0 lg:overflow-hidden"
+        >
+          <Tabs
+            value={activeTab}
+            onValueChange={(val) => {
+              if (val === "ask" || val === "quiz") {
+                setActiveTab(val);
+                if (val === "quiz") setHasOpenedQuiz(true);
+              }
+            }}
+            className="flex flex-col flex-1 min-h-0"
+          >
+            <div className="border-b px-6 py-2 shrink-0">
+              <TabsList>
+                <TabsTrigger value="ask">Ask</TabsTrigger>
+                <TabsTrigger value="quiz">Quiz</TabsTrigger>
+              </TabsList>
             </div>
 
-            {sourcesQuery.isPending ? (
-              <div className="rounded-lg border p-4 bg-muted/20">
-                <p className="text-sm text-muted-foreground">
-                  Loading sources…
-                </p>
-              </div>
-            ) : !hasReadySource ? (
-              <div className="rounded-lg border p-4 bg-muted/20">
-                <p className="text-sm text-muted-foreground">
-                  Upload a PDF and wait until it&apos;s ready before asking.
-                </p>
-              </div>
-            ) : (
-              <form onSubmit={handleAskSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="ask-question">Question</Label>
-                    <span className="text-xs text-muted-foreground">
-                      {question.length}/2000
-                    </span>
-                  </div>
-                  <Textarea
-                    id="ask-question"
-                    value={question}
-                    onChange={(e) => setQuestion(e.target.value.slice(0, 2000))}
-                    onKeyDown={handleKeyDown}
-                    placeholder="What would you like to know from your course materials?"
-                    rows={3}
-                    disabled={askMutation.isPending}
-                    required
-                  />
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="allow-outside"
-                    checked={allowOutside}
-                    onChange={(e) => setAllowOutside(e.target.checked)}
-                    disabled={askMutation.isPending}
-                    className="h-4 w-4 rounded border-border"
-                  />
-                  <Label htmlFor="allow-outside" className="text-xs font-normal cursor-pointer">
-                    Allow answers beyond my course
-                  </Label>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <Button
-                    type="submit"
-                    disabled={askMutation.isPending || !question.trim()}
-                  >
-                    {askMutation.isPending ? "Thinking…" : "Ask"}
-                  </Button>
-                </div>
-
-                {askMutation.isPending && (
-                  <p className="text-sm text-muted-foreground">
-                    {isLongWait
-                      ? "Still working. The AI model is busy, so this can take up to three minutes."
-                      : "Thinking… this usually takes a few seconds, sometimes up to a minute or two."}
+            <TabsContent
+              value="ask"
+              keepMounted
+              className="min-w-0 flex-1 lg:overflow-y-auto mt-0 data-[hidden]:hidden [&[hidden]]:hidden"
+            >
+              <div className="mx-auto w-full max-w-3xl space-y-6 p-6">
+                <div className="space-y-1">
+                  <h2 className="text-lg font-semibold">Ask your sources</h2>
+                  <p className="text-xs text-muted-foreground">
+                    Ask questions grounded directly in your uploaded materials.
                   </p>
-                )}
+                </div>
 
-                {askMutation.isError && (
-                  <div className="p-3 border rounded-lg">
+                {sourcesQuery.isPending ? (
+                  <div className="rounded-lg border p-4 bg-muted/20">
                     <p className="text-sm text-muted-foreground">
-                      {formatAskError(askMutation.error)}
+                      Loading sources…
                     </p>
                   </div>
-                )}
-              </form>
-            )}
-
-            {/* Answer history for this visit */}
-            {answers.length > 0 && (
-              <div className="space-y-6 pt-4 border-t">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold">Answers</h3>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setAnswers([])}
-                    className="text-xs"
-                  >
-                    Clear
-                  </Button>
-                </div>
-
-                <div className="space-y-6 divide-y">
-                  {answers.map((item, idx) => (
-                    <div
-                      key={item.id}
-                      className={idx > 0 ? "pt-6 space-y-3" : "space-y-3"}
-                    >
-                      <div className="space-y-1">
-                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
-                          Question
-                        </p>
-                        <p className="text-sm font-medium">{item.question}</p>
+                ) : !hasReadySource ? (
+                  <div className="rounded-lg border p-4 bg-muted/20">
+                    <p className="text-sm text-muted-foreground">
+                      Upload a PDF and wait until it&apos;s ready before asking.
+                    </p>
+                  </div>
+                ) : (
+                  <form onSubmit={handleAskSubmit} className="space-y-4">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="ask-question">Question</Label>
+                        <span className="text-xs text-muted-foreground">
+                          {question.length}/2000
+                        </span>
                       </div>
-
-                      <div className="space-y-1">
-                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
-                          Answer
-                        </p>
-                        <AnswerView
-                          response={item.response}
-                          sourceMap={sourceMap}
-                        />
-                      </div>
+                      <Textarea
+                        id="ask-question"
+                        value={question}
+                        onChange={(e) => setQuestion(e.target.value.slice(0, 2000))}
+                        onKeyDown={handleKeyDown}
+                        placeholder="What would you like to know from your course materials?"
+                        rows={3}
+                        disabled={askMutation.isPending}
+                        required
+                      />
                     </div>
-                  ))}
-                </div>
+
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        id="allow-outside"
+                        checked={allowOutside}
+                        onChange={(e) => setAllowOutside(e.target.checked)}
+                        disabled={askMutation.isPending}
+                        className="h-4 w-4 rounded border-border"
+                      />
+                      <Label htmlFor="allow-outside" className="text-xs font-normal cursor-pointer">
+                        Allow answers beyond my course
+                      </Label>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <Button
+                        type="submit"
+                        disabled={askMutation.isPending || !question.trim()}
+                      >
+                        {askMutation.isPending ? "Thinking…" : "Ask"}
+                      </Button>
+                    </div>
+
+                    {askMutation.isPending && (
+                      <p className="text-sm text-muted-foreground">
+                        {isLongWait
+                          ? "Still working. The AI model is busy, so this can take up to three minutes."
+                          : "Thinking… this usually takes a few seconds, sometimes up to a minute or two."}
+                      </p>
+                    )}
+
+                    {askMutation.isError && (
+                      <div className="p-3 border rounded-lg">
+                        <p className="text-sm text-muted-foreground">
+                          {formatAskError(askMutation.error)}
+                        </p>
+                      </div>
+                    )}
+                  </form>
+                )}
+
+                {/* Answer history for this visit */}
+                {answers.length > 0 && (
+                  <div className="space-y-6 pt-4 border-t">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-semibold">Answers</h3>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setAnswers([])}
+                        className="text-xs"
+                      >
+                        Clear
+                      </Button>
+                    </div>
+
+                    <div className="space-y-6 divide-y">
+                      {answers.map((item, idx) => (
+                        <div
+                          key={item.id}
+                          className={idx > 0 ? "pt-6 space-y-3" : "space-y-3"}
+                        >
+                          <div className="space-y-1">
+                            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
+                              Question
+                            </p>
+                            <p className="text-sm font-medium">{item.question}</p>
+                          </div>
+
+                          <div className="space-y-1">
+                            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
+                              Answer
+                            </p>
+                            <AnswerView
+                              response={item.response}
+                              sourceMap={sourceMap}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            </TabsContent>
+
+            <TabsContent
+              value="quiz"
+              keepMounted
+              className="min-w-0 flex-1 lg:overflow-y-auto mt-0 data-[hidden]:hidden [&[hidden]]:hidden"
+            >
+              <div className="mx-auto w-full max-w-3xl space-y-6 p-6">
+                <QuizPanel
+                  notebookId={id}
+                  uid={user.uid}
+                  quizRequest={quizRequest}
+                  hasOpenedQuiz={hasOpenedQuiz}
+                />
+              </div>
+            </TabsContent>
+          </Tabs>
         </section>
 
         {viewerSource && (

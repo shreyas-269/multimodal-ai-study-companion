@@ -278,3 +278,143 @@ export async function ask(
   );
 }
 
+// Raw Quiz Types from api-types
+export type QuestionBankResponse = operations["question_bank_get"]["responses"][200]["content"]["application/json"];
+export type QuestionBankItem = components["schemas"]["QuestionBankItem"];
+
+export type QuizCreateRequest = operations["quizzes_create"]["requestBody"]["content"]["application/json"];
+export type RawQuizOut = operations["quizzes_create"]["responses"][201]["content"]["application/json"];
+export type RawQuestionOut = components["schemas"]["QuestionOut"];
+export type QuestionOptionOut = components["schemas"]["QuestionOptionOut"];
+
+export type QuizAnswerRequest = operations["quizzes_answer"]["requestBody"]["content"]["application/json"];
+export type RawQuizAnswerResponse = operations["quizzes_answer"]["responses"][200]["content"]["application/json"];
+export type RawFeedback = components["schemas"]["Feedback"];
+
+export type QuizSummary = operations["quizzes_finish"]["responses"][200]["content"]["application/json"];
+export type TopicSummaryItem = components["schemas"]["TopicSummaryItem"];
+
+// Normalised Types (derived via Omit from generated schemas)
+export type NormalisedQuestion = Omit<RawQuestionOut, "options"> & {
+  options: QuestionOptionOut[];
+};
+
+export type NormalisedFeedback = Omit<
+  RawFeedback,
+  "correct_option_id" | "citations" | "misconception" | "rubric_coverage"
+> & {
+  correct_option_id: string | null;
+  citations: Citation[];
+  misconception: string | null;
+};
+
+export type NormalisedQuiz = Omit<RawQuizOut, "questions" | "answers" | "summary"> & {
+  questions: NormalisedQuestion[];
+};
+
+export type NormalisedAnswerResponse = Omit<RawQuizAnswerResponse, "feedback"> & {
+  feedback: NormalisedFeedback;
+};
+
+// Normalisation Adapter Functions
+export function normaliseQuestion(q: RawQuestionOut): NormalisedQuestion {
+  return {
+    id: q.id,
+    type: q.type,
+    topic_id: q.topic_id,
+    difficulty: q.difficulty,
+    stem: q.stem,
+    options: q.options ?? [],
+  };
+}
+
+export function normaliseFeedback(f: RawFeedback): NormalisedFeedback {
+  return {
+    verdict: f.verdict,
+    correct_answer: f.correct_answer,
+    correct_option_id: f.correct_option_id ?? null,
+    explanation: f.explanation,
+    citations: f.citations ?? [],
+    misconception: f.misconception ?? null,
+  };
+}
+
+export function normaliseQuiz(quiz: RawQuizOut): NormalisedQuiz {
+  return {
+    id: quiz.id,
+    mode: quiz.mode,
+    topic_ids: quiz.topic_ids,
+    status: quiz.status,
+    created_at: quiz.created_at,
+    questions: quiz.questions.map(normaliseQuestion),
+  };
+}
+
+export function normaliseAnswerResponse(res: RawQuizAnswerResponse): NormalisedAnswerResponse {
+  return {
+    question_id: res.question_id,
+    answer: res.answer,
+    already_answered: res.already_answered,
+    feedback: normaliseFeedback(res.feedback),
+  };
+}
+
+// Quiz Endpoints
+export async function getQuestionBank(notebookId: string): Promise<QuestionBankResponse> {
+  return apiFetch<QuestionBankResponse>(
+    `/v1/notebooks/${encodeURIComponent(notebookId)}/question-bank`,
+    {
+      signal: AbortSignal.timeout(30000),
+      timeoutMessage: "This is taking longer than it should. Try again in a minute.",
+    }
+  );
+}
+
+export async function createQuiz(
+  notebookId: string,
+  body: QuizCreateRequest
+): Promise<NormalisedQuiz> {
+  const raw = await apiFetch<RawQuizOut>(
+    `/v1/notebooks/${encodeURIComponent(notebookId)}/quizzes`,
+    {
+      method: "POST",
+      body,
+      signal: AbortSignal.timeout(30000),
+      timeoutMessage: "This is taking longer than it should. Try again in a minute.",
+    }
+  );
+  return normaliseQuiz(raw);
+}
+
+export async function answerQuizQuestion(
+  notebookId: string,
+  quizId: string,
+  body: QuizAnswerRequest
+): Promise<NormalisedAnswerResponse> {
+  const raw = await apiFetch<RawQuizAnswerResponse>(
+    `/v1/notebooks/${encodeURIComponent(notebookId)}/quizzes/${encodeURIComponent(quizId)}/answers`,
+    {
+      method: "POST",
+      body,
+      signal: AbortSignal.timeout(30000),
+      timeoutMessage: "This is taking longer than it should. Try again in a minute.",
+    }
+  );
+  return normaliseAnswerResponse(raw);
+}
+
+export async function finishQuiz(
+  notebookId: string,
+  quizId: string
+): Promise<QuizSummary> {
+  return apiFetch<QuizSummary>(
+    `/v1/notebooks/${encodeURIComponent(notebookId)}/quizzes/${encodeURIComponent(quizId)}/finish`,
+    {
+      method: "POST",
+      signal: AbortSignal.timeout(30000),
+      timeoutMessage: "This is taking longer than it should. Try again in a minute.",
+    }
+  );
+}
+
+

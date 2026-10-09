@@ -1,29 +1,11 @@
 "use client";
 
-import ReactMarkdown from "react-markdown";
-import remarkMath from "remark-math";
-import rehypeKatex from "rehype-katex";
-import "katex/dist/katex.min.css";
 import { CitationChip } from "@/components/citation-chip";
 import { formatCitationTime } from "@/lib/format";
 import type { AskResponse } from "@/lib/api";
+import { MarkdownMath, normalizeMathDelimiters } from "@/components/markdown-math";
 
-/**
- * Converts LaTeX delimiters outside code blocks from \( ... \) to $...$
- * and \[ ... \] to $$...$$, so remark-math and rehype-katex render them cleanly.
- */
-export function normalizeMathDelimiters(text: string): string {
-  const tokens = text.split(/(```[\s\S]*?```|`[^`\n]*?`)/g);
-  return tokens
-    .map((token, i) => {
-      // Odd indices are code snippets (fenced or inline); leave untouched
-      if (i % 2 === 1) return token;
-      let out = token.replace(/\\\[([\s\S]*?)\\\]/g, (_, math) => `$$${math}$$`);
-      out = out.replace(/\\\(([\s\S]*?)\\\)/g, (_, math) => `$${math}$`);
-      return out;
-    })
-    .join("");
-}
+export { normalizeMathDelimiters };
 
 interface AnswerViewProps {
   response: AskResponse;
@@ -38,16 +20,10 @@ export function AnswerView({ response, sourceMap }: AnswerViewProps) {
     p: (typeof response.paragraphs)[number],
     pIndex: number
   ) => {
-    const normalizedText = normalizeMathDelimiters(p.text);
     return (
       <div key={p.id || `p-${pIndex}`} className="space-y-2">
         <div className="text-sm leading-relaxed">
-          <ReactMarkdown
-            remarkPlugins={[remarkMath]}
-            rehypePlugins={[rehypeKatex]}
-          >
-            {normalizedText}
-          </ReactMarkdown>
+          <MarkdownMath content={p.text} />
         </div>
         {p.citations && p.citations.length > 0 && (
           <div className="flex flex-wrap gap-1.5 pt-1">
