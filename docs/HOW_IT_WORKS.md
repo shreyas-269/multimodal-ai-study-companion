@@ -493,3 +493,30 @@ Template for each feature:
 - *Why remove duplicate labels?* The backend tags topics per passage, and one page can hold several passages, which would show as two identical "p. 72" buttons. Different slides on the same handout page have different labels ("slide 5", "slide 6"), so they stay separate.
 - *Why does "Other material" sometimes not appear?* It only appears once something is in it, a student's own upload. An empty row would look like something failed to load.
 - *How does it fit a narrow panel?* Long topic names and citation labels wrap instead of overflowing, and on a phone the whole panel stacks above the answers.
+
+---
+
+## I3b · Lecture videos and YouTube citations
+
+**What it does:** The six lecture videos are now part of the demo notebook, searchable through their transcripts. When an answer uses something said in a lecture, its citation is a YouTube link that opens at the moment it was said: asked about the radar example in Lecture 2, the answer links to 25:05, about 10 seconds before the word "radar" is first spoken. Videos are never stored by the app; the links go to MIT's own YouTube uploads.
+
+**Data flow:**
+- **Build:** `ingest_course.py` sends each video row of the manifest to its video handler → reads the overnight transcript (`derived\transcripts\L02.json`) → drops the spoken Creative Commons preamble at the start (segments mentioning OpenCourseWare, donations and similar, never past 90 seconds) → groups the remaining few-second Whisper segments into chunks of at most 60 seconds and 400 tokens, never splitting a segment → embeds them, tags them with the lecture's topic, and stores each chunk with its time range and its segments → marks the source ready. A missing or broken transcript fails only that source; the rest of the notebook stays usable. The six lectures gave 314 chunks in 48 seconds.
+- **Asking:** retrieval takes the 40 nearest chunks, keeps ready sources, and then the top 10, with at most 5 of them from video, so textbook and slide passages aren't crowded out. Gemini sees each video passage labelled "Lecture 2…, at 25:05" and cites passage numbers as usual.
+- **Pinpointing:** for every video citation, the backend compares the citing paragraph with each pair of neighbouring segments in that chunk, using the same local embedding model (no Gemini call). The link starts at the earliest pair that is nearly as good a match as the best one. `build_citation` turns that time into "{title}, 25:05" and `https://www.youtube.com/watch?v=…&t=1505s`.
+- **Sources button:** a topic's video entries are grouped into 5-minute windows and open at each window's start.
+
+**Main files:** `backend/scripts/ingest_course.py`, `backend/app/ingestion/video.py`, `backend/app/chat/citations.py`, `backend/app/chat/answer.py`, `backend/app/llm/prompts/ask.py`, `backend/app/retrieval/search.py`, `backend/app/api/topics.py`, `backend/app/db/notebooks.py`, `backend/app/db/sources.py`; tests `test_video_ingestion.py`, `test_segment_refinement.py`, `test_search.py`.
+
+**A judge might ask… / my answer:**
+- *Why not host the videos?* The lectures are already on YouTube under MIT's licence. Linking to them with a timestamp costs nothing, respects the licence, and opens the exact moment.
+- *How do you get within seconds when chunks are a minute long?* A minute of speech is a good size for search, but too coarse for a link. Each chunk keeps its Whisper segments, and after the answer is written the backend finds the pair of segments that best matches the paragraph citing it, with local embeddings. On the radar example the link lands about 10 seconds before the word "radar", where the example is being set up.
+- *Why the earliest good match, not the best one?* The best-matching sentence is often in the middle of an explanation. Starting at the earliest nearly-as-good match gives the student the start of the example. Pairs of segments beat single segments in testing: 8 of 9 test paragraphs landed within 10 seconds, against 3 of 9.
+- *Why cap video at 5 of 10 passages?* The six lectures produced 314 chunks against 399 from all the PDFs. Uncapped, video took 59% of the top 10, and all ten for some questions, so the textbook and slides vanished from answers.
+- *What about the "This content is provided under a Creative Commons licence" intro?* It's spoken at the start of every OCW video. It's dropped before indexing, so it can't be retrieved or cited, just like the terms pages in the PDFs.
+- *Can students upload their own lectures?* Not in v1: transcription runs on the laptop overnight. The hosted demo explains that videos are ingested on the laptop only.
+- *What went wrong while building it?*
+  - The plan review simulated retrieval with the real embeddings and found video crowding out the PDFs (59% of the top 10), which led to the cap.
+  - It also found that one missing transcript would have set the notebook's status to a value the API doesn't allow, making every request fail.
+  - It tested pinpointing on real paragraphs: single segments landed 11 seconds or more late, so pinpointing uses segment pairs.
+  - The verify confirmed the radar link at 9.9 seconds before the first mention, and flagged that one test question took 153 seconds because the first Gemini model failed and the chain fell back. That's a deployment problem (cache pre-warming and model order), not a video one.
