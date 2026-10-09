@@ -560,3 +560,26 @@ Template for each feature:
   - My own spec had a bug in the cycle rule that would have stopped the fallback from ever firing. The recheck caught it.
   - The first test suite passed all 161 tests but let 17 of 22 planted bugs through. Targeted tests closed every one.
 - *Known limits?* The store is in memory; the Firestore version is a separate task against the same interface. The seal scan doesn't catch `importlib` tricks. And the parameters are fixed textbook-style values, not fitted to real students.
+
+---
+
+## FX3 · Video in the UI
+
+**What it does:** Now that lecture videos are part of the demo course, answers mix textbook pages, slides and moments in lectures. Every citation chip shows what it will do: a file icon for a PDF page, which opens in the viewer beside the answer, or a play icon and an external-link icon for a lecture moment, which opens YouTube in a new tab at that second. "Passages used" shows video passages as the lecture and time ("Lecture 2, 25:05") instead of a page. Video source cards have "Watch on YouTube" and never an Open button, because there's no PDF to open. A slow answer now says it is still working after 15 seconds, and the browser waits up to 3 minutes before giving up.
+
+**Data flow:** `POST /v1/notebooks/{nb}/ask` → the backend returns paragraphs whose Citations carry `open: {kind: "pdf", source_id, page, bbox?}` or `open: {kind: "youtube", url}` (the URL is built by the backend from `youtube_id`, `offset_s` and the chunk's start time), plus `context` passages whose `loc` holds either a page or `t_start_s`/`t_end_s` → `components/citation-chip.tsx` picks the icon and the action from `open.kind`: `openSource({sourceId, page, bbox})` for PDFs, a new tab with `rel="noopener noreferrer"` for YouTube → `components/answer.tsx` shows each passage's location: the page for PDFs, or the source title (from the sources the page has already loaded) and `t_start_s` formatted as m:ss or h:mm:ss for videos → `lib/api.ts` gives the ask request 180 s, and the page switches its pending text after 15 s, on a timer that is cleared when the request ends.
+
+**Main files:**
+- `frontend/components/citation-chip.tsx`: the icons and the accessible "opens YouTube in a new tab" hint.
+- `frontend/components/answer.tsx`: video passages in "Passages used".
+- `frontend/app/notebooks/[id]/page.tsx`: the long-wait message and the source-title lookup.
+- `frontend/lib/api.ts`: the 180-second ask timeout.
+- `frontend/lib/format.ts` and `frontend/components/source-card.tsx`: the shared m:ss and h:mm:ss time formatting; video cards with "Watch on YouTube".
+
+**A judge might ask… / my answer:**
+- *Why icons on the citations?* Some citations open a page beside the answer and others leave the app for YouTube. A student should know which will happen before clicking. The UI is monochrome on purpose, so the difference is shown by shape, not colour.
+- *Who builds the YouTube link?* The backend, from the lecture's YouTube ID, its offset and the passage's start time. The frontend only opens the URL it's given, so a chip, a source card and the Sources list can never disagree about which second a citation points to.
+- *Why does the browser wait 180 seconds when the backend's deadline is 150?* The backend's 150 seconds covers only the model calls; retrieval and the response come on top, and lane A measured 153 s in testing. If both limits were 150, an answer that succeeded at 152 s would be thrown away by the browser. 30 seconds of margin removes that race.
+- *Why the "still working" message?* When the first free-tier model is out of quota or overloaded, the chain moves on to the next one, and that can take a couple of minutes. Without a message, a long wait looks like a frozen app, and a reload throws the answer away.
+- *What happens if it does time out?* The message says to try again in a minute. That works because the server keeps going after the browser gives up and caches the answer when it finishes, so the retry usually comes back instantly with no extra quota.
+- *Why can't you open a lecture video in the viewer?* Videos aren't hosted at all. Citations link to the exact second on YouTube, which costs nothing and plays the original lecture.
