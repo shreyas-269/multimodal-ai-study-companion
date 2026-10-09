@@ -613,3 +613,37 @@ Template for each feature:
   - It also found that a topic with only short-answer questions would have created an empty quiz and a write; that the answer route would have reported a corrupt question as "not found"; and that creating a quiz could read up to 1,200 documents.
   - The fixes were one transaction for the status check and the attempt, one write per member document, a 409 decided after filtering by type, a separate single-question read, and a limit of 100 per topic in document-ID order.
   - The verify then ran everything against the running backend: 553 tests pass, the OpenAPI diff shows only additions, and no answer key appears before answering.
+
+  ---
+
+## F4 · Quiz UI
+
+**What it does:** The centre panel of a notebook now has two tabs, Ask and Quiz. Each topic in the topic list has a Quiz button that opens the Quiz tab with that topic ticked; it never starts a quiz by itself. The start form lists the course topics with how many verified questions each has, lets the student pick up to six topics and 5 or 10 questions, and starts a quiz. Questions come one at a time ("Question 2 of 5", the topic, the difficulty), with real maths. After each answer the student sees whether it was right, the correct answer, the common mistake behind a wrong option, an explanation, and citation chips that open the exact textbook page, slide or lecture moment the question was built from. At the end, "See results" shows the score, a line per topic and every question with its answer.
+
+**Data flow:**
+- *Opening the Quiz tab* (first time only) → `getQuestionBank()` in `lib/api.ts` → `GET /v1/notebooks/{nb}/question-bank` → rows of `{topic_id, type, verified}` → the start form sums the verified MCQ and numerical questions per topic (short answers aren't served yet). Topic names come from the same topics query as the topic list, through the shared `useTopics` hook.
+- *Start quiz* → `createQuiz()` → `POST /quizzes {mode: "chosen", topic_ids, count}` → 201 with the questions (no answer keys, explanations or citations) → normalised in `lib/api.ts`, so components never see a missing field.
+- *Check answer* (button or Enter, through one form, guarded so a double press sends one request) → `answerQuizQuestion()` → `POST /quizzes/{q}/answers {question_id, answer, time_ms}` → `{answer, already_answered, feedback}` → the feedback shown is always the server's, including a repeated answer's stored first feedback. MCQs send the option ID; numerical questions send the student's text, which the backend grades exactly (3/8, 0.375 and 37.5% all count).
+- *See results* → `finishQuiz()` → `POST /quizzes/{q}/finish` → the summary (`correct`, `total`, `by_topic`) → the review, with the per-question rows built from the feedback the page already holds.
+- *State:* one quiz session object plus a phase (start, creating, answering, submitting, feedback, finishing, review). A session counter means a response that arrives after Quit is ignored. The Quiz tab stays mounted, so switching to Ask and back loses nothing. Every quiz call has a 30-second timeout and is never retried automatically; Try again appears only after a timeout or a network error.
+
+**Main files:**
+- `frontend/components/quiz-panel.tsx`: the state machine, the session counter and the error handling.
+- `frontend/components/quiz-question-card.tsx` and `frontend/components/quiz-feedback.tsx`: one question, its inputs, and the feedback with citation chips.
+- The start form and review components beside them (`frontend/components/quiz-*.tsx`).
+- The shared Markdown-with-maths component, extracted from `frontend/components/answer.tsx`, with an inline mode for option text inside labels.
+- `frontend/lib/api.ts`: the four quiz calls, typed by operation ID, and the adapter that normalises their responses.
+- `frontend/lib/use-topics.ts`: the topics query shared by the topic list and the quiz.
+- `frontend/app/notebooks/[id]/page.tsx`: the Ask and Quiz tabs and the topic list's Quiz button wiring.
+- `frontend/components/ui/tabs.tsx`: shadcn Tabs (Base UI), added with the shadcn CLI.
+
+**A judge might ask… / my answer:**
+- *How do you know the quiz questions are right?* They're checked before a student ever sees them. Numerical answers are recomputed by running Python with exact fractions, and multiple-choice questions are answered blind by a second model; a question that fails is never shown. The quiz screen only displays what the bank holds and what the server grades.
+- *Can a student see the answers early, for example in the browser's network tab?* No. The questions arrive without answer keys, explanations or citations. Those come back only in the response to an answer, one question at a time.
+- *Why doesn't the Quiz button start a quiz straight away?* Creating a quiz marks its questions as seen, and the question bank is small. A misclick shouldn't use up questions, and the student also gets to choose how many.
+- *What happens if I double-click Check answer, or the connection drops?* A double click sends one request: a guard is set before the request leaves. If the connection drops, the answer stays in the box and a Try again button appears. Even a repeated answer is harmless, because the server returns the first stored feedback and changes nothing.
+- *Where do the citations in the feedback come from?* Each question stores the passages it was generated from. The feedback's citation chips are built by the same backend function as every answer's, so they open the exact page with the slide outlined, or the lecture at the right second.
+- *Why one question at a time?* Feedback right after each answer is when a student learns most: they see the mistake, its explanation and the page to reread while the question is still in their head.
+- *What does Study Coach change here?* Nothing yet. The quiz works the same with it on or off, and the score summary works with it off. Recording each answer into per-topic mastery, and the adaptive quiz that picks weak topics, arrive with Study Coach.
+- *How was it tested before the real question bank existed?* A throwaway script seeded a scratch notebook with ten test questions covering both question types, all three difficulties, both maths notations and a topic with no questions, so every screen could be clicked through in the browser; the notebook was deleted afterwards. The final check then ran against the demo course's real, verified questions.
+- *What went wrong while building it?* The plan went through one review and two rechecks before any code. They caught a topic preselection that would have come back after Quit, a double press of Enter that could send two answers, retries that would have re-sent requests on their own, and a Markdown change that would have stripped images from Ask answers. The build's verify then found that a failed finish showed no message and that Quit was disabled while a request was in flight; both were fixed and re-verified before the browser test.
