@@ -11,7 +11,7 @@ from google.genai import errors
 from tenacity import wait_none
 
 from app.config import get_settings
-from app.db import chunk_path, get_db, llm_cache_path, notebook_path
+from app.db import chunk_path, get_db, llm_cache_path, notebook_path, user_path
 from app.db.notebooks import DEMO_NOTEBOOK_ID
 from app.embeddings import embed_passages
 from app.llm import generate
@@ -926,3 +926,234 @@ def test_ask_refs_sources_validation(user_tracker, notebook_tracker, mock_gemini
     assert req.refs is not None
     assert len(req.refs.sources) == 50
     assert all(len(s) == 128 for s in req.refs.sources)
+
+
+
+
+
+def test_ask_topic_id_validation(user_tracker, notebook_tracker, mock_gemini_client):
+    """6.1 Validation of topic_id on POST /ask."""
+    uid, token = create_emulator_user()
+    user_tracker.append(uid)
+    nb_id = create_test_notebook(token)
+    notebook_tracker.append(nb_id)
+
+    # topic_id="t9" returns 422
+    res_t9 = client.post(
+        f"/v1/notebooks/{nb_id}/ask",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"question": "What is Bayes?", "topic_id": "t9"},
+    )
+    assert res_t9.status_code == 422
+
+    # topic_id="t2\n" returns 422
+    res_newline = client.post(
+        f"/v1/notebooks/{nb_id}/ask",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"question": "What is Bayes?", "topic_id": "t2\n"},
+    )
+    assert res_newline.status_code == 422
+
+    # Valid topic_id="t2" returns 200
+    src_id = f"src_{uuid4().hex[:6]}"
+    seed_notebook_source_and_chunks(
+        nb_id=nb_id,
+        source_id=src_id,
+        title="Test Source",
+        chunks_text=["Sample Bayes content."],
+    )
+    mock_gemini_client.models.generate_content.side_effect = None
+    mock_gemini_client.models.generate_content.return_value = MagicMock(
+        text=json.dumps({"paragraphs": [{"text": "Answer text", "sources": [1]}]})
+    )
+    res_valid = client.post(
+        f"/v1/notebooks/{nb_id}/ask",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"question": "What is Bayes?", "topic_id": "t2"},
+    )
+    assert res_valid.status_code == 200
+
+
+def test_ask_topic_id_changes_retrieval_order(user_tracker, notebook_tracker, mock_gemini_client):
+    """6.2 Valid topic_id changes retrieval order; scores stay raw."""
+    import math
+
+    import numpy as np
+
+    from app.embeddings import embed_query
+
+    generate._call_gemini_api.retry.wait = wait_none()
+
+    uid, token = create_emulator_user()
+    user_tracker.append(uid)
+    nb_id = create_test_notebook(token)
+    notebook_tracker.append(nb_id)
+
+    src_id = f"src_{uuid4().hex[:6]}"
+    chunk_ids = seed_notebook_source_and_chunks(
+        nb_id=nb_id,
+        source_id=src_id,
+        title="Probability Source",
+        chunks_text=["Off-topic chunk text.", "On-topic chunk text."],
+    )
+    db = get_db()
+    question = f"Question about Bayes {uuid4().hex[:6]}"
+    q_arr = np.array(embed_query(question), dtype=float)
+    q_norm = q_arr / np.linalg.norm(q_arr)
+
+    rnd = np.ones_like(q_norm)
+    orth = rnd - np.dot(rnd, q_norm) * q_norm
+    orth = orth / np.linalg.norm(orth)
+
+    v_off = (0.80 * q_norm + math.sqrt(1 - 0.80**2) * orth).tolist()
+    v_topic = (0.77 * q_norm + math.sqrt(1 - 0.77**2) * orth).tolist()
+
+    db.document(chunk_path(nb_id, chunk_ids[0])).update({
+        "embedding": Vector(v_off),
+        "topic_id": None,
+    })
+    db.document(chunk_path(nb_id, chunk_ids[1])).update({
+        "embedding": Vector(v_topic),
+        "topic_id": "t2",
+    })
+
+    mock_gemini_client.models.generate_content.side_effect = None
+    mock_gemini_client.models.generate_content.return_value = MagicMock(
+        text=json.dumps({"paragraphs": [{"text": "Sample answer", "sources": [1]}]})
+    )
+
+    # Without topic_id: chunk 0 is first (0.80 > 0.77)
+    res_no_topic = client.post(
+        f"/v1/notebooks/{nb_id}/ask",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"question": question},
+    )
+    assert res_no_topic.status_code == 200
+    ctx_no_topic = res_no_topic.json()["context"]
+    assert ctx_no_topic[0]["chunk_id"] == chunk_ids[0]
+    assert ctx_no_topic[1]["chunk_id"] == chunk_ids[1]
+
+    # With topic_id="t2": chunk 1 receives +0.05 boost (0.82 > 0.80) and comes first!
+    res_topic = client.post(
+        f"/v1/notebooks/{nb_id}/ask",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"question": question, "topic_id": "t2"},
+    )
+    assert res_topic.status_code == 200
+    ctx_topic = res_topic.json()["context"]
+    assert ctx_topic[0]["chunk_id"] == chunk_ids[1]
+    assert ctx_topic[1]["chunk_id"] == chunk_ids[0]
+
+    # Scores returned in context equal the RAW unboosted scores
+    assert round(ctx_topic[0]["score"], 2) == round(ctx_no_topic[1]["score"], 2) == 0.77
+    assert round(ctx_topic[1]["score"], 2) == round(ctx_no_topic[0]["score"], 2) == 0.80
+
+
+def test_ask_custom_instructions_in_prompt(user_tracker, notebook_tracker, mock_gemini_client):
+    """6.3 Saved custom instructions appear in prompt."""
+    generate._call_gemini_api.retry.wait = wait_none()
+
+    uid, token = create_emulator_user()
+    user_tracker.append(uid)
+    nb_id = create_test_notebook(token)
+    notebook_tracker.append(nb_id)
+
+    src_id = f"src_{uuid4().hex[:6]}"
+    seed_notebook_source_and_chunks(
+        nb_id=nb_id,
+        source_id=src_id,
+        title="Source 1",
+        chunks_text=["Some reference material."],
+    )
+
+    db = get_db()
+    db.document(user_path(uid)).set({
+        "format": {"custom_instructions": "Be brief"},
+    }, merge=True)
+
+    captured_contents = None
+
+    def fake_gen(*args, **kwargs):
+        nonlocal captured_contents
+        captured_contents = kwargs.get("contents")
+        return MagicMock(
+            text=json.dumps({"paragraphs": [{"text": "Brief answer", "sources": [1]}]})
+        )
+
+    mock_gemini_client.models.generate_content.side_effect = fake_gen
+
+    res = client.post(
+        f"/v1/notebooks/{nb_id}/ask",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"question": f"Question {uuid4().hex[:6]}?"},
+    )
+    assert res.status_code == 200
+    assert captured_contents is not None
+    assert "<<<STUDENT PREFERENCES>>>\nBe brief\n<<<END STUDENT PREFERENCES>>>" in captured_contents
+
+
+def test_ask_whitespace_only_instructions(user_tracker, notebook_tracker, mock_gemini_client):
+    """6.4 Whitespace-only instructions produces no preferences block in prompt."""
+    generate._call_gemini_api.retry.wait = wait_none()
+
+    uid, token = create_emulator_user()
+    user_tracker.append(uid)
+    nb_id = create_test_notebook(token)
+    notebook_tracker.append(nb_id)
+
+    src_id = f"src_{uuid4().hex[:6]}"
+    seed_notebook_source_and_chunks(
+        nb_id=nb_id,
+        source_id=src_id,
+        title="Source 1",
+        chunks_text=["Some reference material."],
+    )
+
+    db = get_db()
+    db.document(user_path(uid)).set({
+        "format": {"custom_instructions": "   "},
+    }, merge=True)
+
+    captured_contents = None
+
+    def fake_gen(*args, **kwargs):
+        nonlocal captured_contents
+        captured_contents = kwargs.get("contents")
+        return MagicMock(text=json.dumps({"paragraphs": [{"text": "Answer", "sources": [1]}]}))
+
+    mock_gemini_client.models.generate_content.side_effect = fake_gen
+
+    res = client.post(
+        f"/v1/notebooks/{nb_id}/ask",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"question": f"Question {uuid4().hex[:6]}?"},
+    )
+    assert res.status_code == 200
+    assert captured_contents is not None
+    assert "<<<STUDENT PREFERENCES>>>" not in captured_contents
+
+
+def test_custom_instructions_reader_bad_shapes():
+    """9.1 Bad shapes return None: missing user, non-dict format, non-string instructions."""
+    from app.db.users import get_user_custom_instructions
+
+    # Missing user document
+    non_existent_uid = f"missing_{uuid4().hex}"
+    assert get_user_custom_instructions(non_existent_uid) is None
+
+    # format set to a string
+    db = get_db()
+    uid_str_fmt = f"test_fmt_str_{uuid4().hex[:8]}"
+    db.document(user_path(uid_str_fmt)).set({"format": "not_a_dict"})
+    try:
+        assert get_user_custom_instructions(uid_str_fmt) is None
+    finally:
+        db.document(user_path(uid_str_fmt)).delete()
+
+    # non-string custom_instructions
+    uid_num_inst = f"test_num_inst_{uuid4().hex[:8]}"
+    db.document(user_path(uid_num_inst)).set({"format": {"custom_instructions": 12345}})
+    try:
+        assert get_user_custom_instructions(uid_num_inst) is None
+    finally:
+        db.document(user_path(uid_num_inst)).delete()

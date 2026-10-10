@@ -118,3 +118,22 @@ def save_chat_messages_transaction(
         return n + 1, n + 2
 
     return _tx(transaction)
+
+
+def get_recent_chat_messages(
+    nb: str,
+    uid: str,
+    chat_id: str,
+    limit: int = 6,
+) -> list[dict[str, Any]]:
+    """Read up to `limit` recent messages with field mask, returned oldest first."""
+    db = get_db()
+    query = (
+        db.collection(messages_collection_path(nb, uid, chat_id))
+        .select(["role", "text", "paragraphs"])
+        .order_by("seq", direction=firestore.Query.DESCENDING)
+        .limit(limit)
+    )
+    snaps = list(query.stream())
+    # Reverse descending seq order to chronological (oldest first)
+    return [doc.to_dict() or {} for doc in reversed(snaps)]

@@ -8,6 +8,7 @@ from app.db import chunks_collection_path, get_db
 from app.embeddings import embed_query
 from app.models.citation import Location
 from app.models.notebook import Notebook
+from app.retrieval.rerank import rerank
 
 
 class RetrievedChunk(BaseModel):
@@ -17,6 +18,7 @@ class RetrievedChunk(BaseModel):
     loc: Location
     score: float
     segments: list[dict[str, Any]] = Field(default_factory=list)
+    topic_id: str | None = None
 
 
 def select_top_chunks(
@@ -56,7 +58,11 @@ def select_top_chunks(
     return selected
 
 
-def search(notebook: Notebook, question: str) -> list[RetrievedChunk]:
+def search(
+    notebook: Notebook,
+    question: str,
+    topic_id: str | None = None,
+) -> list[RetrievedChunk]:
     ready_source_ids = {s.source_id for s in notebook.sources_summary if s.status == "ready"}
     if not ready_source_ids:
         return []
@@ -85,6 +91,7 @@ def search(notebook: Notebook, question: str) -> list[RetrievedChunk]:
         loc_data = data.get("loc") or {}
         loc = Location.model_validate(loc_data)
         segments = data.get("segments") or []
+        chunk_topic_id = data.get("topic_id")
 
         candidates.append(
             RetrievedChunk(
@@ -94,7 +101,9 @@ def search(notebook: Notebook, question: str) -> list[RetrievedChunk]:
                 loc=loc,
                 score=score,
                 segments=segments,
+                topic_id=chunk_topic_id,
             )
         )
 
-    return select_top_chunks(candidates, max_total=10, max_video=5)
+    reranked = rerank(candidates, topic_id)
+    return select_top_chunks(reranked, max_total=10, max_video=5)

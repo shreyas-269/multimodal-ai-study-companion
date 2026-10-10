@@ -5,6 +5,7 @@ from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
 from app.chat.citations import build_citation
+from app.chat.history import build_retrieval_query
 from app.db.sources import get_sources_metadata_by_ids
 from app.embeddings import embed_passages
 from app.ingestion.topics import cosine_similarity
@@ -69,6 +70,8 @@ def answer_question(
     question: str,
     chunks: list[RetrievedChunk],
     allow_outside: bool = False,
+    history: str | None = None,
+    custom_instructions: str | None = None,
 ) -> tuple[list[Paragraph], str]:
     sources_by_id = {s.source_id: s for s in notebook.sources_summary}
     chunks_data = []
@@ -79,8 +82,17 @@ def answer_question(
         t_start_s = c.loc.t_start_s
         chunks_data.append((idx, s_title, page, c.text, t_start_s))
 
-    system_instruction = build_system_instruction(allow_outside)
-    contents = build_contents(question, chunks_data)
+    system_instruction = build_system_instruction(
+        allow_outside,
+        has_history=bool(history),
+        has_preferences=bool(custom_instructions),
+    )
+    contents = build_contents(
+        question,
+        chunks_data,
+        custom_instructions=custom_instructions,
+        history=history,
+    )
 
     cache_key_parts = [
         str(allow_outside).lower(),
@@ -171,6 +183,11 @@ def run_answer_pipeline(
     question: str,
     allow_outside: bool = False,
     refs: Refs | None = None,
+    *,
+    topic_id: str | None = None,
+    previous_user_text: str | None = None,
+    history: str | None = None,
+    custom_instructions: str | None = None,
 ) -> tuple[list[Paragraph], list[ContextChunk], str, int]:
     """Execute the complete question answering pipeline with retrieval and timing."""
     start_time = time.perf_counter()
@@ -181,12 +198,15 @@ def run_answer_pipeline(
             detail={"code": "not_ready", "message": "This notebook has no processed sources yet."},
         )
 
-    chunks = search(notebook, question)
+    retrieval_query = build_retrieval_query(question, previous_user_text)
+    chunks = search(notebook, retrieval_query, topic_id=topic_id)
     paragraphs, model_name = answer_question(
         notebook=notebook,
         question=question,
         chunks=chunks,
         allow_outside=allow_outside,
+        history=history,
+        custom_instructions=custom_instructions,
     )
 
     context = [

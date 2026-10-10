@@ -1,3 +1,4 @@
+import re
 from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -11,6 +12,7 @@ class Refs(BaseModel):
     sources: list[Annotated[str, Field(min_length=1, max_length=128)]] = Field(
         default_factory=list, max_length=50
     )
+
 
 class AskRequest(BaseModel):
     """Request payload for POST /v1/notebooks/{nb}/ask."""
@@ -30,6 +32,18 @@ class AskRequest(BaseModel):
             raise ValueError("question must be between 1 and 2000 characters")
         return stripped
 
+    @field_validator("topic_id", mode="before")
+    @classmethod
+    def validate_topic_id(cls, v: object) -> str | None:
+        if v is None:
+            return None
+        if not isinstance(v, str):
+            raise ValueError("topic_id must be a string")
+        if not re.fullmatch(r"^(t[1-6]|other)$", v):
+            raise ValueError("topic_id must match ^(t[1-6]|other)$")
+        return v
+
+
 class ContextChunk(BaseModel):
     """Retrieved chunk context returned alongside the answer."""
     model_config = ConfigDict(extra="ignore")
@@ -37,6 +51,7 @@ class ContextChunk(BaseModel):
     text: str
     loc: Location
     score: float
+
 
 class AskResponse(BaseModel):
     """Response envelope for POST /v1/notebooks/{nb}/ask matching api-contract.md."""

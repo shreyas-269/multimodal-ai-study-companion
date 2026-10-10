@@ -6,10 +6,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from app.api.access import get_readable_notebook, is_valid_notebook_id
 from app.auth import CurrentUser
 from app.chat.answer import run_answer_pipeline
+from app.chat.history import format_chat_history
 from app.db.chats import (
     create_chat_doc,
     get_chat_snapshot,
     get_message_snapshot,
+    get_recent_chat_messages,
     list_chats_snapshots,
     list_messages_snapshots,
     save_chat_messages_transaction,
@@ -18,6 +20,7 @@ from app.db.client import get_db
 from app.db.members import ensure_member
 from app.db.paths import chats_collection_path, messages_collection_path
 from app.db.topics import get_topic_snapshot
+from app.db.users import get_user_custom_instructions
 from app.models.ask import Refs
 from app.models.chat import (
     ChatCreate,
@@ -246,6 +249,19 @@ def send_message(
             detail={"code": "not_found", "message": "Chat not found."},
         )
 
+    chat_data = chat_snap.to_dict() or {}
+    topic_id = chat_data.get("topic_id")
+
+    recent_messages = get_recent_chat_messages(nb, current_user.uid, c, limit=6)
+    previous_user_text = None
+    for m in reversed(recent_messages):
+        if m.get("role") == "user":
+            previous_user_text = m.get("text")
+            break
+
+    history = format_chat_history(recent_messages)
+    custom_instructions = get_user_custom_instructions(current_user.uid)
+
     user_created_at = datetime.now(UTC)
 
     paragraphs, context, model_name, latency_ms = run_answer_pipeline(
@@ -253,6 +269,10 @@ def send_message(
         question=body.text,
         allow_outside=body.allow_outside,
         refs=body.refs,
+        topic_id=topic_id,
+        previous_user_text=previous_user_text,
+        history=history,
+        custom_instructions=custom_instructions,
     )
 
     db = get_db()

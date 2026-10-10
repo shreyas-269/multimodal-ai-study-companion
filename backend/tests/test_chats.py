@@ -11,7 +11,7 @@ from tenacity import wait_none
 
 from app.api import chats
 from app.config import get_settings
-from app.db import chunk_path, get_db, notebook_path, topic_path
+from app.db import chunk_path, get_db, notebook_path, topic_path, user_path
 from app.db.chats import get_message_snapshot
 from app.db.members import get_member_snapshot, member_path
 from app.db.paths import (
@@ -821,17 +821,34 @@ def test_chats_send_cache_hit(
     assert res1.status_code == 200
     assert mock_gemini_client.models.generate_content.call_count == 1
 
+    res_c2 = client.post(
+        f"/v1/notebooks/{nb_id}/chats",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"name": "Cache Chat 2"},
+    )
+    c2_id = res_c2.json()["id"]
+
     res2 = client.post(
-        f"/v1/notebooks/{nb_id}/chats/{c_id}/messages",
+        f"/v1/notebooks/{nb_id}/chats/{c2_id}/messages",
         headers={"Authorization": f"Bearer {token}"},
         json={"text": question_text},
     )
     assert res2.status_code == 200
+    # Fresh chat Turn 1 with no history hits cache:
     assert mock_gemini_client.models.generate_content.call_count == 1
     assert (
         res1.json()["assistant_message"]["paragraphs"]
         == res2.json()["assistant_message"]["paragraphs"]
     )
+
+    # Turn 2 to c_id has conversation history, causing a cache miss:
+    res3 = client.post(
+        f"/v1/notebooks/{nb_id}/chats/{c_id}/messages",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"text": question_text},
+    )
+    assert res3.status_code == 200
+    assert mock_gemini_client.models.generate_content.call_count == 2
 
 
 def test_cleanup_ask_forbids_pasted_images_and_refs_files(
@@ -933,3 +950,440 @@ def test_chats_create_preserves_existing_member(user_tracker, notebook_tracker):
     mem_data = mem_snap.to_dict()
     assert mem_data["seen_question_ids"] == ["q_keep"]
     assert mem_data["checked"] == {"t1": True}
+
+
+def test_get_recent_chat_messages_limit_and_order(user_tracker, notebook_tracker):
+    """4.1 Only last 6 messages, oldest first."""
+    from app.db.chats import get_recent_chat_messages
+
+    uid, token = create_emulator_user()
+    user_tracker.append(uid)
+    nb_id = create_test_notebook(token)
+    notebook_tracker.append(nb_id)
+
+    res_c = client.post(
+        f"/v1/notebooks/{nb_id}/chats",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"name": "History Test Chat"},
+    )
+    c_id = res_c.json()["id"]
+
+    db = get_db()
+    coll = db.collection(messages_collection_path(nb_id, uid, c_id))
+    for i in range(1, 11):
+        coll.document(f"msg_{i:02d}").set({
+            "seq": i,
+            "role": "user" if i % 2 == 1 else "assistant",
+            "text": f"Message text {i}",
+            "created_at": datetime.now(UTC),
+        })
+
+    recent = get_recent_chat_messages(nb_id, uid, c_id, limit=6)
+    assert len(recent) == 6
+    texts = [m["text"] for m in recent]
+    assert texts == [f"Message text {i}" for i in range(5, 11)]
+
+
+def test_chats_send_second_message_conversation_block(
+    user_tracker, notebook_tracker, mock_gemini_client
+):
+    """7.1 Second message contains conversation block with Turn 1."""
+    generate._call_gemini_api.retry.wait = wait_none()
+
+    uid, token = create_emulator_user()
+    user_tracker.append(uid)
+    nb_id = create_test_notebook(token)
+    notebook_tracker.append(nb_id)
+
+    src_id = f"src_{uuid4().hex[:6]}"
+    seed_notebook_source_and_chunks(
+        nb_id=nb_id,
+        source_id=src_id,
+        title="Bayes Source",
+        chunks_text=["Bayes theorem details."],
+    )
+
+    res_c = client.post(
+        f"/v1/notebooks/{nb_id}/chats",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"name": "Chat Turn Test"},
+    )
+    c_id = res_c.json()["id"]
+
+    mock_gemini_client.models.generate_content.side_effect = None
+    mock_gemini_client.models.generate_content.return_value = MagicMock(
+        text=json.dumps({"paragraphs": [{"text": "Bayes relates probabilities.", "sources": [1]}]})
+    )
+    res1 = client.post(
+        f"/v1/notebooks/{nb_id}/chats/{c_id}/messages",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"text": "What is Bayes?"},
+    )
+    assert res1.status_code == 200
+
+    captured_contents = None
+
+    def fake_gen(*args, **kwargs):
+        nonlocal captured_contents
+        captured_contents = kwargs.get("contents")
+        return MagicMock(
+            text=json.dumps({"paragraphs": [{"text": "Explained again.", "sources": [1]}]})
+        )
+
+    mock_gemini_client.models.generate_content.side_effect = fake_gen
+    res2 = client.post(
+        f"/v1/notebooks/{nb_id}/chats/{c_id}/messages",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"text": "Explain that again"},
+    )
+    assert res2.status_code == 200
+    assert captured_contents is not None
+
+    conv_start = captured_contents.find("<<<CONVERSATION>>>")
+    conv_end = captured_contents.find("<<<END CONVERSATION>>>")
+    assert conv_start != -1
+    assert conv_end != -1
+
+    conv_block = captured_contents[conv_start:conv_end]
+    assert "Student: What is Bayes?" in conv_block
+    assert "Tutor: Bayes relates probabilities." in conv_block
+    assert conv_block.find("Student:") < conv_block.find("Tutor:")
+    assert "Explain that again" not in conv_block
+
+
+def test_chats_send_retrieval_query_second_message(
+    user_tracker, notebook_tracker, mock_gemini_client, monkeypatch
+):
+    """7.2 Retrieval query embedding for second message uses question + previous user text."""
+    import sys
+    generate._call_gemini_api.retry.wait = wait_none()
+
+    uid, token = create_emulator_user()
+    user_tracker.append(uid)
+    nb_id = create_test_notebook(token)
+    notebook_tracker.append(nb_id)
+
+    src_id = f"src_{uuid4().hex[:6]}"
+    seed_notebook_source_and_chunks(
+        nb_id=nb_id,
+        source_id=src_id,
+        title="Source",
+        chunks_text=["Content."],
+    )
+
+    res_c = client.post(
+        f"/v1/notebooks/{nb_id}/chats",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"name": "Retrieval Query Test"},
+    )
+    c_id = res_c.json()["id"]
+
+    mock_gemini_client.models.generate_content.side_effect = None
+    mock_gemini_client.models.generate_content.return_value = MagicMock(
+        text=json.dumps({"paragraphs": [{"text": "Answer 1", "sources": [1]}]})
+    )
+    res1 = client.post(
+        f"/v1/notebooks/{nb_id}/chats/{c_id}/messages",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"text": "What is Bayes?"},
+    )
+    assert res1.status_code == 200
+
+    search_mod = sys.modules["app.retrieval.search"]
+    orig_embed = search_mod.embed_query
+    captured_queries = []
+
+    def spy_embed(q):
+        captured_queries.append(q)
+        return orig_embed(q)
+
+    monkeypatch.setattr(search_mod, "embed_query", spy_embed)
+
+    res2 = client.post(
+        f"/v1/notebooks/{nb_id}/chats/{c_id}/messages",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"text": "Explain that again"},
+    )
+    assert res2.status_code == 200
+    assert captured_queries
+    assert captured_queries[-1] == "Explain that again\nWhat is Bayes?"
+
+
+def test_chats_topic_id_reaches_retrieval(user_tracker, notebook_tracker, mock_gemini_client):
+    """7.3 Chat topic_id reaches retrieval: on-topic chunk comes first in chats_send."""
+    generate._call_gemini_api.retry.wait = wait_none()
+
+    uid, token = create_emulator_user()
+    user_tracker.append(uid)
+    nb_id = create_test_notebook(token)
+    notebook_tracker.append(nb_id)
+
+    db = get_db()
+    db.document(f"notebooks/{nb_id}/topics/t2").set({"name": "Bayes Topic"})
+
+    res_c = client.post(
+        f"/v1/notebooks/{nb_id}/chats",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"name": "Topic Chat", "topic_id": "t2"},
+    )
+    assert res_c.status_code == 201
+    c_id = res_c.json()["id"]
+
+    src_id = f"src_{uuid4().hex[:6]}"
+    chunk_ids = seed_notebook_source_and_chunks(
+        nb_id=nb_id,
+        source_id=src_id,
+        title="Source",
+        chunks_text=["Off-topic chunk.", "On-topic chunk."],
+    )
+    import math
+
+    import numpy as np
+    from google.cloud.firestore_v1.vector import Vector
+
+    from app.embeddings import embed_query
+
+    question = f"Question {uuid4().hex[:6]}"
+    q_arr = np.array(embed_query(question), dtype=float)
+    q_norm = q_arr / np.linalg.norm(q_arr)
+
+    rnd = np.ones_like(q_norm)
+    orth = rnd - np.dot(rnd, q_norm) * q_norm
+    orth = orth / np.linalg.norm(orth)
+
+    v_off = (0.80 * q_norm + math.sqrt(1 - 0.80**2) * orth).tolist()
+    v_topic = (0.77 * q_norm + math.sqrt(1 - 0.77**2) * orth).tolist()
+
+    db.document(chunk_path(nb_id, chunk_ids[0])).update({
+        "embedding": Vector(v_off),
+        "topic_id": None,
+    })
+    db.document(chunk_path(nb_id, chunk_ids[1])).update({
+        "embedding": Vector(v_topic),
+        "topic_id": "t2",
+    })
+
+    mock_gemini_client.models.generate_content.side_effect = None
+    mock_gemini_client.models.generate_content.return_value = MagicMock(
+        text=json.dumps({"paragraphs": [{"text": "Answer", "sources": [1]}]})
+    )
+
+    res = client.post(
+        f"/v1/notebooks/{nb_id}/chats/{c_id}/messages",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"text": question},
+    )
+    assert res.status_code == 200
+    ctx = res.json()["assistant_message"]["context"]
+    assert ctx[0]["chunk_id"] == chunk_ids[1]
+    assert ctx[1]["chunk_id"] == chunk_ids[0]
+
+
+def test_chats_custom_instructions_in_chat_prompt(
+    user_tracker, notebook_tracker, mock_gemini_client
+):
+    """7.4 Custom instructions reach the chat prompt."""
+    generate._call_gemini_api.retry.wait = wait_none()
+
+    uid, token = create_emulator_user()
+    user_tracker.append(uid)
+    nb_id = create_test_notebook(token)
+    notebook_tracker.append(nb_id)
+
+    src_id = f"src_{uuid4().hex[:6]}"
+    seed_notebook_source_and_chunks(
+        nb_id=nb_id,
+        source_id=src_id,
+        title="Source",
+        chunks_text=["Source content."],
+    )
+
+    db = get_db()
+    db.document(user_path(uid)).set({
+        "format": {"custom_instructions": "Chat concisely and use bullet points"},
+    }, merge=True)
+
+    res_c = client.post(
+        f"/v1/notebooks/{nb_id}/chats",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"name": "Preferences Chat"},
+    )
+    c_id = res_c.json()["id"]
+
+    captured_contents = None
+
+    def fake_gen(*args, **kwargs):
+        nonlocal captured_contents
+        captured_contents = kwargs.get("contents")
+        return MagicMock(
+            text=json.dumps({"paragraphs": [{"text": "Bullet answer", "sources": [1]}]})
+        )
+
+    mock_gemini_client.models.generate_content.side_effect = fake_gen
+    res = client.post(
+        f"/v1/notebooks/{nb_id}/chats/{c_id}/messages",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"text": "Give me an explanation"},
+    )
+    assert res.status_code == 200
+    assert captured_contents is not None
+    expected_pref = (
+        "<<<STUDENT PREFERENCES>>>\n"
+        "Chat concisely and use bullet points\n"
+        "<<<END STUDENT PREFERENCES>>>"
+    )
+    assert expected_pref in captured_contents
+
+
+def test_ask_and_chats_shared_cache(
+    user_tracker, notebook_tracker, cache_tracker, mock_gemini_client
+):
+    """8.1 First chat message hits /ask cache; 8.2 second turn is a cache miss."""
+    generate._call_gemini_api.retry.wait = wait_none()
+
+    uid, token = create_emulator_user()
+    user_tracker.append(uid)
+    nb_id = create_test_notebook(token)
+    notebook_tracker.append(nb_id)
+
+    src_id = f"src_{uuid4().hex[:6]}"
+    seed_notebook_source_and_chunks(
+        nb_id=nb_id,
+        source_id=src_id,
+        title="Shared Cache Source",
+        chunks_text=["Shared cache chunk content."],
+    )
+
+    question_text = f"Identical shared question {uuid4().hex[:8]}"
+    mock_gemini_client.models.generate_content.side_effect = None
+    mock_gemini_client.models.generate_content.return_value = MagicMock(
+        text=json.dumps({"paragraphs": [{"text": "Answer from LLM", "sources": [1]}]})
+    )
+
+    # 1. Call /ask (populates cache) -> call_count becomes 1
+    res_ask = client.post(
+        f"/v1/notebooks/{nb_id}/ask",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"question": question_text},
+    )
+    assert res_ask.status_code == 200
+    assert mock_gemini_client.models.generate_content.call_count == 1
+
+    # 2. Create chat, send same question as Turn 1 (hits /ask cache) -> call_count remains 1
+    res_c = client.post(
+        f"/v1/notebooks/{nb_id}/chats",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"name": "Shared Cache Chat"},
+    )
+    c_id = res_c.json()["id"]
+
+    res_chat1 = client.post(
+        f"/v1/notebooks/{nb_id}/chats/{c_id}/messages",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"text": question_text},
+    )
+    assert res_chat1.status_code == 200
+    assert mock_gemini_client.models.generate_content.call_count == 1
+
+    # 3. Send Turn 2 in that chat: conversation history changes prompt hash,
+    # causing a cache miss -> call_count becomes 2
+    res_chat2 = client.post(
+        f"/v1/notebooks/{nb_id}/chats/{c_id}/messages",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"text": question_text},
+    )
+    assert res_chat2.status_code == 200
+    assert mock_gemini_client.models.generate_content.call_count == 2
+
+
+def test_chats_send_history_uses_last_six(
+    user_tracker, notebook_tracker, mock_gemini_client
+):
+    """M6: chats_send includes only the last 6 messages in conversation block."""
+    generate._call_gemini_api.retry.wait = wait_none()
+
+    uid, token = create_emulator_user()
+    user_tracker.append(uid)
+    nb_id = create_test_notebook(token)
+    notebook_tracker.append(nb_id)
+
+    src_id = f"src_{uuid4().hex[:6]}"
+    seed_notebook_source_and_chunks(
+        nb_id=nb_id,
+        source_id=src_id,
+        title="History Test Source",
+        chunks_text=["Sample text for retrieval."],
+    )
+
+    res_c = client.post(
+        f"/v1/notebooks/{nb_id}/chats",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"name": "History Limit Test Chat"},
+    )
+    assert res_c.status_code == 201
+    c_id = res_c.json()["id"]
+
+    turns = [
+        ("first-question-marker", "first-answer-marker"),
+        ("second-question-marker", "second-answer-marker"),
+        ("third-question-marker", "third-answer-marker"),
+        ("fourth-question-marker", "fourth-answer-marker"),
+    ]
+
+    for q_text, a_text in turns:
+        mock_gemini_client.models.generate_content.side_effect = None
+        mock_gemini_client.models.generate_content.return_value = MagicMock(
+            text=json.dumps({"paragraphs": [{"text": a_text, "sources": [1]}]})
+        )
+        res = client.post(
+            f"/v1/notebooks/{nb_id}/chats/{c_id}/messages",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"text": q_text},
+        )
+        assert res.status_code == 200
+
+    captured_contents = None
+
+    def fake_gen(*args, **kwargs):
+        nonlocal captured_contents
+        captured_contents = kwargs.get("contents")
+        return MagicMock(
+            text=json.dumps({"paragraphs": [{"text": "fifth-answer-marker", "sources": [1]}]})
+        )
+
+    mock_gemini_client.models.generate_content.side_effect = fake_gen
+    res5 = client.post(
+        f"/v1/notebooks/{nb_id}/chats/{c_id}/messages",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"text": "fifth-question-marker"},
+    )
+    assert res5.status_code == 200
+    assert captured_contents is not None
+
+    conv_start = captured_contents.find("<<<CONVERSATION>>>")
+    conv_end = captured_contents.find("<<<END CONVERSATION>>>")
+    assert conv_start != -1
+    assert conv_end != -1
+
+    conv_block = captured_contents[conv_start + len("<<<CONVERSATION>>>"):conv_end]
+
+    assert "second-question-marker" in conv_block
+    assert "second-answer-marker" in conv_block
+    assert "third-question-marker" in conv_block
+    assert "third-answer-marker" in conv_block
+    assert "fourth-question-marker" in conv_block
+    assert "fourth-answer-marker" in conv_block
+
+    assert "first-question-marker" not in conv_block
+    assert "first-answer-marker" not in conv_block
+
+    assert "fifth-question-marker" not in conv_block
+
+    student_lines = [
+        line for line in conv_block.splitlines() if line.startswith("Student:")
+    ]
+    tutor_lines = [
+        line for line in conv_block.splitlines() if line.startswith("Tutor:")
+    ]
+    assert len(student_lines) == 3
+    assert len(tutor_lines) == 3
