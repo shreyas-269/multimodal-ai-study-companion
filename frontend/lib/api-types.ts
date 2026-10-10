@@ -301,6 +301,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/notebooks/{nb}/chats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List
+         * @description List chats for the caller in a readable notebook, ordered by updated_at descending.
+         */
+        get: operations["chats_list"];
+        put?: never;
+        /**
+         * Create
+         * @description Create a new chat in a readable notebook.
+         */
+        post: operations["chats_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/notebooks/{nb}/chats/{c}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Messages
+         * @description List messages for a chat, newest pages first, chronological within page.
+         */
+        get: operations["chats_list_messages"];
+        put?: never;
+        /**
+         * Send
+         * @description Send a message to a chat, execute answering pipeline, and save turn transactionally.
+         */
+        post: operations["chats_send"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -320,8 +368,6 @@ export interface components {
              * @default false
              */
             allow_outside: boolean;
-            /** Pasted Images */
-            pasted_images?: string[];
         };
         /**
          * AskResponse
@@ -347,6 +393,76 @@ export interface components {
              * @enum {string}
              */
             role: "content" | "syllabus";
+        };
+        /**
+         * ChatCreate
+         * @description Request body for POST /v1/notebooks/{nb}/chats.
+         */
+        ChatCreate: {
+            /** Name */
+            name?: string | null;
+            /** Topic Id */
+            topic_id?: string | null;
+        };
+        /**
+         * ChatList
+         * @description Paginated list of chats.
+         */
+        ChatList: {
+            /** Items */
+            items: components["schemas"]["ChatOut"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /**
+         * ChatMessageCreate
+         * @description Request body for POST /v1/notebooks/{nb}/chats/{c}/messages.
+         */
+        ChatMessageCreate: {
+            /** Text */
+            text: string;
+            refs?: components["schemas"]["Refs"] | null;
+            /**
+             * Allow Outside
+             * @default false
+             */
+            allow_outside: boolean;
+        };
+        /**
+         * ChatOut
+         * @description Response model for a chat document.
+         */
+        ChatOut: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Topic Id */
+            topic_id?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Message Count */
+            message_count: number;
+        };
+        /**
+         * ChatSendOut
+         * @description Response envelope for POST /v1/notebooks/{nb}/chats/{c}/messages.
+         */
+        ChatSendOut: {
+            user_message: components["schemas"]["MessageOut"];
+            assistant_message: components["schemas"]["MessageOut"];
+            /** Model */
+            model: string;
+            /** Latency Ms */
+            latency_ms: number;
         };
         /**
          * Citation
@@ -462,6 +578,41 @@ export interface components {
             sheet?: string | null;
             /** Cell Range */
             cell_range?: string | null;
+        };
+        /**
+         * MessageList
+         * @description Paginated list of messages.
+         */
+        MessageList: {
+            /** Items */
+            items: components["schemas"]["MessageOut"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /**
+         * MessageOut
+         * @description Public message model matching data-model.md.
+         */
+        MessageOut: {
+            /** Id */
+            id: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "user" | "assistant";
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Text */
+            text?: string | null;
+            /** Paragraphs */
+            paragraphs?: components["schemas"]["Paragraph"][] | null;
+            refs?: components["schemas"]["Refs"];
+            /** Context */
+            context?: components["schemas"]["ContextChunk"][] | null;
         };
         /**
          * Notebook
@@ -708,8 +859,6 @@ export interface components {
         Refs: {
             /** Sources */
             sources?: string[];
-            /** Files */
-            files?: string[];
         };
         /**
          * SourceList
@@ -1504,6 +1653,154 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["QuizSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    chats_list: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                nb: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    chats_create: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                nb: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    chats_list_messages: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                nb: string;
+                c: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    chats_send: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                nb: string;
+                c: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatMessageCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatSendOut"];
                 };
             };
             /** @description Validation Error */
