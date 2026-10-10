@@ -1,3 +1,5 @@
+from typing import Annotated
+
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.citation import Location, Paragraph
@@ -6,8 +8,9 @@ from app.models.citation import Location, Paragraph
 class Refs(BaseModel):
     """Explicit references filter for search (accepted and ignored until S5)."""
     model_config = ConfigDict(extra="forbid")
-    sources: list[str] = Field(default_factory=list)
-    files: list[str] = Field(default_factory=list)
+    sources: list[Annotated[str, Field(min_length=1, max_length=128)]] = Field(
+        default_factory=list, max_length=50
+    )
 
 class AskRequest(BaseModel):
     """Request payload for POST /v1/notebooks/{nb}/ask."""
@@ -16,7 +19,6 @@ class AskRequest(BaseModel):
     topic_id: str | None = None  # accepted and ignored until S5
     refs: Refs | None = None     # accepted and ignored until S5
     allow_outside: bool = False
-    pasted_images: list[str] = Field(default_factory=list)
 
     @field_validator("question", mode="before")
     @classmethod

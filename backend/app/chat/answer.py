@@ -1,5 +1,7 @@
+import time
 from typing import Any
 
+from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
 from app.chat.citations import build_citation
@@ -8,9 +10,10 @@ from app.embeddings import embed_passages
 from app.ingestion.topics import cosine_similarity
 from app.llm.generate import generate_json_with_model
 from app.llm.prompts.ask import PROMPT_VERSION, build_contents, build_system_instruction
+from app.models.ask import ContextChunk, Refs
 from app.models.citation import Citation, Paragraph
 from app.models.notebook import Notebook
-from app.retrieval.search import RetrievedChunk
+from app.retrieval.search import RetrievedChunk, search
 
 
 class RawParagraph(BaseModel):
@@ -161,3 +164,40 @@ def answer_question(
         )
 
     return paragraphs, model_name
+
+
+def run_answer_pipeline(
+    notebook: Notebook,
+    question: str,
+    allow_outside: bool = False,
+    refs: Refs | None = None,
+) -> tuple[list[Paragraph], list[ContextChunk], str, int]:
+    """Execute the complete question answering pipeline with retrieval and timing."""
+    start_time = time.perf_counter()
+
+    if not any(s.status == "ready" for s in notebook.sources_summary):
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "not_ready", "message": "This notebook has no processed sources yet."},
+        )
+
+    chunks = search(notebook, question)
+    paragraphs, model_name = answer_question(
+        notebook=notebook,
+        question=question,
+        chunks=chunks,
+        allow_outside=allow_outside,
+    )
+
+    context = [
+        ContextChunk(
+            chunk_id=c.chunk_id,
+            text=c.text,
+            loc=c.loc,
+            score=c.score,
+        )
+        for c in chunks
+    ]
+
+    latency_ms = max(1, int((time.perf_counter() - start_time) * 1000))
+    return paragraphs, context, model_name, latency_ms

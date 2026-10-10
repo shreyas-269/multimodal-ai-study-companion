@@ -91,3 +91,22 @@ def attempt_path(nb: str, uid: str, attempt: str) -> str:
     """Return Firestore document path for an attempt."""
     return f"notebooks/{nb}/members/{uid}/attempts/{attempt}"
 
+
+def chats_collection_path(nb: str, uid: str) -> str:
+    """Return Firestore collection path for a member's chats."""
+    return f"notebooks/{nb}/members/{uid}/chats"
+
+
+def chat_path(nb: str, uid: str, chat_id: str) -> str:
+    """Return Firestore document path for a member's chat."""
+    return f"notebooks/{nb}/members/{uid}/chats/{chat_id}"
+
+
+def messages_collection_path(nb: str, uid: str, chat_id: str) -> str:
+    """Return Firestore collection path for a chat's messages."""
+    return f"notebooks/{nb}/members/{uid}/chats/{chat_id}/messages"
+
+
+def message_path(nb: str, uid: str, chat_id: str, msg_id: str) -> str:
+    """Return Firestore document path for a chat message."""
+    return f"notebooks/{nb}/members/{uid}/chats/{chat_id}/messages/{msg_id}"

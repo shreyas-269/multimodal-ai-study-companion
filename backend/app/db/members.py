@@ -1,5 +1,6 @@
 from typing import Any
 
+from google.api_core.exceptions import AlreadyExists
 from google.cloud import firestore
 
 from app.db.client import get_db
@@ -20,3 +21,13 @@ def get_member_snapshot(nb_id: str, uid: str) -> firestore.DocumentSnapshot:
     """Fetch member document snapshot directly."""
     db = get_db()
     return db.document(member_path(nb_id, uid)).get()
+
+
+def ensure_member(notebook_id: str, uid: str) -> None:
+    """Create member document with default data if absent; never overwrites existing document."""
+    db = get_db()
+    ref = db.document(member_path(notebook_id, uid))
+    try:
+        ref.create(default_member_data())
+    except AlreadyExists:
+        pass

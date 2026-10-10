@@ -415,7 +415,15 @@ def test_ask_validation_errors(user_tracker, notebook_tracker):
     )
     assert res.status_code == 422
     assert res.json()["error"]["code"] == "invalid"
-    assert res.json()["error"]["message"] == "Pasted images aren't supported yet."
+
+    # refs.files rejected
+    res = client.post(
+        f"/v1/notebooks/{nb_id}/ask",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"question": "Valid question?", "refs": {"files": ["file.pdf"]}},
+    )
+    assert res.status_code == 422
+    assert res.json()["error"]["code"] == "invalid"
 
 
 def test_ask_cache_hit_and_immutability(
@@ -867,3 +875,54 @@ def test_prompt_header_format_video():
     )
     assert "Source: Lecture 2, at 12:34" in contents
     assert "Page:" not in contents
+
+
+def test_ask_refs_sources_validation(user_tracker, notebook_tracker, mock_gemini_client):
+    """Verify refs.sources constraints on POST /ask and AskRequest model."""
+    from app.models.ask import AskRequest, Refs
+
+    uid, token = create_emulator_user()
+    user_tracker.append(uid)
+    nb_id = create_test_notebook(token)
+    notebook_tracker.append(nb_id)
+
+    mock_gemini_client.models.generate_content.reset_mock()
+
+    # 1. POST /ask with 51 valid-looking strings gives 422 invalid, Gemini never called
+    res_51 = client.post(
+        f"/v1/notebooks/{nb_id}/ask",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"question": "Valid question?", "refs": {"sources": [f"src_{i}" for i in range(51)]}},
+    )
+    assert res_51.status_code == 422
+    assert res_51.json()["error"]["code"] == "invalid"
+    mock_gemini_client.models.generate_content.assert_not_called()
+
+    # 2. refs {"sources": ["a"*129]} gives 422 invalid
+    res_129 = client.post(
+        f"/v1/notebooks/{nb_id}/ask",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"question": "Valid question?", "refs": {"sources": ["a" * 129]}},
+    )
+    assert res_129.status_code == 422
+    assert res_129.json()["error"]["code"] == "invalid"
+    mock_gemini_client.models.generate_content.assert_not_called()
+
+    # 3. refs {"sources": [""]} gives 422 invalid
+    res_empty = client.post(
+        f"/v1/notebooks/{nb_id}/ask",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"question": "Valid question?", "refs": {"sources": [""]}},
+    )
+    assert res_empty.status_code == 422
+    assert res_empty.json()["error"]["code"] == "invalid"
+    mock_gemini_client.models.generate_content.assert_not_called()
+
+    # 4. AskRequest model accepts refs.sources of exactly 50 strings of 128 characters
+    req = AskRequest(
+        question="Valid question?",
+        refs=Refs(sources=["s" * 128 for _ in range(50)]),
+    )
+    assert req.refs is not None
+    assert len(req.refs.sources) == 50
+    assert all(len(s) == 128 for s in req.refs.sources)

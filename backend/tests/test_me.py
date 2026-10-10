@@ -173,6 +173,16 @@ def test_me_operation_ids():
         paths["/v1/notebooks/{nb}/sources/{src}/file"]["get"]["operationId"]
         == "sources_get_file"
     )
+    assert paths["/v1/notebooks/{nb}/chats"]["post"]["operationId"] == "chats_create"
+    assert paths["/v1/notebooks/{nb}/chats"]["get"]["operationId"] == "chats_list"
+    assert (
+        paths["/v1/notebooks/{nb}/chats/{c}/messages"]["get"]["operationId"]
+        == "chats_list_messages"
+    )
+    assert (
+        paths["/v1/notebooks/{nb}/chats/{c}/messages"]["post"]["operationId"]
+        == "chats_send"
+    )
 
     # Verify uniqueness of all operation IDs in openapi.json
     operation_ids = []
