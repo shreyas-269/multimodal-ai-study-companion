@@ -35,33 +35,28 @@ export function toBbox(value: unknown): Bbox | null {
 }
 
 /**
- * Scales, expands, and clamps a bounding box in PDF points to CSS pixels.
- * Returns null if pageWidthPt, pageHeightPt or renderedWidthPx is not > 0,
+ * Scales, expands, and clamps a bounding box in PDF points to percentages of the page box
+ * so the highlight scales automatically with zoom and window resizes.
+ * Returns null if pageWidthPt or pageHeightPt is not > 0,
  * or if no clamped area remains.
  */
 export function bboxToCssRect(
   bbox: Bbox,
   pageWidthPt: number,
   pageHeightPt: number,
-  renderedWidthPx: number,
-  outsetPx: number
+  renderedWidthPx?: number,
+  outsetPx?: number
 ): CssRect | null {
   if (
     typeof pageWidthPt !== "number" ||
     typeof pageHeightPt !== "number" ||
-    typeof renderedWidthPx !== "number" ||
     !Number.isFinite(pageWidthPt) ||
     !Number.isFinite(pageHeightPt) ||
-    !Number.isFinite(renderedWidthPx) ||
     pageWidthPt <= 0 ||
-    pageHeightPt <= 0 ||
-    renderedWidthPx <= 0
+    pageHeightPt <= 0
   ) {
     return null;
   }
-
-  const scale = renderedWidthPx / pageWidthPt;
-  const renderedHeightPx = pageHeightPt * scale;
 
   const [x0, y0, x1, y1] = bbox;
   const clampedX0 = Math.max(0, Math.min(pageWidthPt, x0));
@@ -73,23 +68,36 @@ export function bboxToCssRect(
     return null;
   }
 
-  const safeOutset = Number.isFinite(outsetPx) ? outsetPx : 0;
+  let outsetXPercent = 0;
+  let outsetYPercent = 0;
+  if (
+    typeof renderedWidthPx === "number" &&
+    Number.isFinite(renderedWidthPx) &&
+    renderedWidthPx > 0
+  ) {
+    const scale = renderedWidthPx / pageWidthPt;
+    const renderedHeightPx = pageHeightPt * scale;
+    const safeOutset =
+      typeof outsetPx === "number" && Number.isFinite(outsetPx) ? outsetPx : 0;
+    outsetXPercent = (safeOutset / renderedWidthPx) * 100;
+    outsetYPercent = (safeOutset / renderedHeightPx) * 100;
+  }
 
-  const px0 = Math.max(0, Math.min(renderedWidthPx, clampedX0 * scale - safeOutset));
-  const py0 = Math.max(0, Math.min(renderedHeightPx, clampedY0 * scale - safeOutset));
-  const px1 = Math.max(0, Math.min(renderedWidthPx, clampedX1 * scale + safeOutset));
-  const py1 = Math.max(0, Math.min(renderedHeightPx, clampedY1 * scale + safeOutset));
+  const left = Math.max(0, (clampedX0 / pageWidthPt) * 100 - outsetXPercent);
+  const top = Math.max(0, (clampedY0 / pageHeightPt) * 100 - outsetYPercent);
+  const right = Math.min(100, (clampedX1 / pageWidthPt) * 100 + outsetXPercent);
+  const bottom = Math.min(100, (clampedY1 / pageHeightPt) * 100 + outsetYPercent);
 
-  const width = px1 - px0;
-  const height = py1 - py0;
+  const width = right - left;
+  const height = bottom - top;
 
   if (width <= 0 || height <= 0) {
     return null;
   }
 
   return {
-    left: px0,
-    top: py0,
+    left,
+    top,
     width,
     height,
   };

@@ -9,6 +9,7 @@ import { bboxToCssRect } from "@/lib/pdf-highlight";
 import { getSourceFileRequest } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Minus, Plus } from "lucide-react";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
 
@@ -18,6 +19,9 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 ).toString();
 
 const PDF_OPTIONS = {};
+
+const ZOOM_LEVELS = [1, 1.25, 1.5, 2, 3] as const;
+type ZoomFactor = (typeof ZOOM_LEVELS)[number];
 
 export interface PdfViewerProps {
   notebookId: string;
@@ -44,6 +48,11 @@ export function PdfViewer({
   const highlightRef = useRef<HTMLDivElement>(null);
   const lastScrolledNavKeyRef = useRef<number | null>(null);
 
+  const [zoom, setZoom] = useState<ZoomFactor>(1);
+  const zoomRef = useRef<ZoomFactor>(zoom);
+  useEffect(() => {
+    zoomRef.current = zoom;
+  }, [zoom]);
   const [containerWidth, setContainerWidth] = useState<number>(0);
   const [numPages, setNumPages] = useState<number | null>(null);
   const [pageSize, setPageSize] = useState<{
@@ -81,28 +90,84 @@ export function PdfViewer({
     return () => observer.disconnect();
   }, []);
 
-  const renderedWidth = Math.floor(containerWidth);
+  const handleZoomOut = () => {
+    const currentIndex = ZOOM_LEVELS.indexOf(zoom);
+    if (currentIndex > 0) {
+      setZoom(ZOOM_LEVELS[currentIndex - 1]);
+    }
+  };
+
+  const handleZoomIn = () => {
+    const currentIndex = ZOOM_LEVELS.indexOf(zoom);
+    if (currentIndex < ZOOM_LEVELS.length - 1) {
+      setZoom(ZOOM_LEVELS[currentIndex + 1]);
+    }
+  };
+
+  const handleZoomFit = () => {
+    setZoom(1);
+  };
+
+  const fitWidth = Math.floor(containerWidth);
+  const renderedWidth = Math.floor(fitWidth * zoom);
   const isCurrentPageMeasured = pageSize != null && pageSize.pageNumber === page;
   const isCurrentPageHighlighted = highlight != null && highlight.page === page;
 
+  // Outline is positioned in percentages of the rendered page box so it scales automatically with zoom and resizes.
   const rect =
     isCurrentPageHighlighted && isCurrentPageMeasured && renderedWidth > 0
       ? bboxToCssRect(highlight.bbox, pageSize.width, pageSize.height, renderedWidth, 3)
       : null;
 
   useEffect(() => {
-    if (
-      renderedPageNumber === page &&
-      highlight &&
-      highlight.page === page &&
-      rect &&
-      highlightRef.current &&
-      typeof window !== "undefined" &&
-      window.matchMedia("(min-width: 1024px)").matches &&
-      lastScrolledNavKeyRef.current !== navKey
-    ) {
-      lastScrolledNavKeyRef.current = navKey;
-      highlightRef.current.scrollIntoView({ block: "nearest", inline: "nearest" });
+    if (renderedPageNumber !== page || lastScrolledNavKeyRef.current === navKey) {
+      return;
+    }
+
+    // Record navKey as handled at every zoom level so each citation navigation is processed exactly once.
+    lastScrolledNavKeyRef.current = navKey;
+
+    const hasOutline =
+      highlight && highlight.page === page && rect && highlightRef.current;
+
+    if (!hasOutline) {
+      return;
+    }
+
+    const currentZoom = zoomRef.current;
+    if (currentZoom === 1) {
+      if (
+        typeof window !== "undefined" &&
+        window.matchMedia("(min-width: 1024px)").matches
+      ) {
+        highlightRef.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
+      }
+    } else {
+      // Scrolling uses the viewer's own container and never scrollIntoView so the page around the viewer never jumps, especially on narrow screens.
+      const container = containerRef.current;
+      const highlightEl = highlightRef.current;
+      if (container && highlightEl) {
+        const containerBox = container.getBoundingClientRect();
+        const highlightBox = highlightEl.getBoundingClientRect();
+
+        const highlightCenterX = highlightBox.left + highlightBox.width / 2;
+        const highlightCenterY = highlightBox.top + highlightBox.height / 2;
+
+        const currentVisibleCenterX = containerBox.left + container.clientWidth / 2;
+        const currentVisibleCenterY = containerBox.top + container.clientHeight / 2;
+
+        const diffX = highlightCenterX - currentVisibleCenterX;
+        const diffY = highlightCenterY - currentVisibleCenterY;
+
+        const targetScrollLeft = container.scrollLeft + diffX;
+        const targetScrollTop = container.scrollTop + diffY;
+
+        const maxScrollLeft = Math.max(0, container.scrollWidth - container.clientWidth);
+        const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
+
+        container.scrollLeft = Math.max(0, Math.min(maxScrollLeft, targetScrollLeft));
+        container.scrollTop = Math.max(0, Math.min(maxScrollTop, targetScrollTop));
+      }
     }
   }, [renderedPageNumber, page, highlight, rect, navKey]);
 
@@ -172,6 +237,38 @@ export function PdfViewer({
             </Button>
           </div>
 
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleZoomOut}
+              disabled={zoom <= 1}
+              aria-label="Zoom out"
+            >
+              <Minus />
+            </Button>
+            <span className="min-w-10 text-center text-xs font-medium tabular-nums">
+              {zoom === 1 ? "Fit" : `${Math.round(zoom * 100)}%`}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleZoomIn}
+              disabled={zoom >= 3}
+              aria-label="Zoom in"
+            >
+              <Plus />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleZoomFit}
+              disabled={zoom === 1}
+            >
+              Fit width
+            </Button>
+          </div>
+
           <div className="flex items-center gap-2">
             <span>
               Page {page} of {numPages ?? "…"}
@@ -190,7 +287,15 @@ export function PdfViewer({
       )}
 
       {/* Content */}
-      <div ref={containerRef} className="w-full min-h-[300px]">
+      {/* Height is bounded and overflow enabled only when zoomed (> 1) so Fit mode stays exactly as before. */}
+      <div
+        ref={containerRef}
+        className={
+          zoom > 1
+            ? "w-full min-h-[300px] overflow-auto max-h-[70vh] lg:max-h-[calc(100dvh-13.5rem)]"
+            : "w-full min-h-[300px]"
+        }
+      >
         {isTokenFetching && <p className="text-sm text-muted-foreground p-4">Loading PDF…</p>}
 
         {!isTokenFetching && isErrorState && (
@@ -236,10 +341,10 @@ export function PdfViewer({
                   aria-hidden="true"
                   className="pointer-events-none absolute z-10 rounded-sm border-2 border-black bg-black/5 shadow-[0_0_0_2px_white]"
                   style={{
-                    left: rect.left,
-                    top: rect.top,
-                    width: rect.width,
-                    height: rect.height,
+                    left: `${rect.left}%`,
+                    top: `${rect.top}%`,
+                    width: `${rect.width}%`,
+                    height: `${rect.height}%`,
                   }}
                 />
               )}
