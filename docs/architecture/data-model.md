@@ -34,9 +34,9 @@
 
 | Path | Fields |
 | --- | --- |
-| `notebooks/{nb}/members/{uid}` | checked {topic_id: true}, seen_question_ids [], diagnostic {status (not_started / in_progress / skipped / done), quiz_id}, created_at. Created on first open |
-| `.../members/{uid}/chats/{chat}` | name, topic_id (null for the whole notebook), created_at, updated_at |
-| `.../chats/{chat}/messages/{msg}` | A Message (below). Stores retrieved chunk IDs and scores, not chunk text |
+| `notebooks/{nb}/members/{uid}` | checked {topic_id: true}, seen_question_ids [], diagnostic {status (not_started / in_progress / skipped / done), quiz_id}, created_at. Created on first open. Created only if absent (ensure_member, ref.create), never overwritten. |
+| `.../members/{uid}/chats/{chat}` | name, topic_id (null for the whole notebook), message_count, created_at, updated_at |
+| `.../chats/{chat}/messages/{msg}` | A Message (below). Stores retrieved chunk IDs and scores, not chunk text. Also stores seq (consecutive per chat, internal, never returned); a turn's two messages are written together only after the answer succeeds. |
 | `.../members/{uid}/quizzes/{quiz}` | mode (adaptive / chosen / diagnostic), topic_ids, question_ids, position, status, score, report, created_at |
 | `.../members/{uid}/attempts/{a}` | question_id, quiz_id, topic_id, type, answer, correct, score (0–1), time_ms, created_at |
 | `.../members/{uid}/coach_events/{e}` | kind (quiz_answer / chat_signal / checkbox), topic_id, value (quiz_answer: the score 0–1; chat_signal: 1; checkbox: 1 tick, 0 untick), created_at. Written only by the Study Coach. IDs: `qa_{attempt_id}` and `cs_{message_id}` are dedupe markers (the qa_ one is written in the same transaction as the mastery update); checkbox events use auto-IDs |

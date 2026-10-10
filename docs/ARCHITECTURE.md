@@ -1,6 +1,6 @@
 # Architecture
 
-**Status: v1.3 (9 Oct 2026, after S4 Ingestion).** Checkpoint 1 passed on 6 Oct; S4's protected scope (page, slide and timestamp citations, topics, the demo notebook with video) passed on 9 Oct. The data model, API contract, libraries and repo layout change only through a new line in DECISIONS.md.
+**Status: v1.3 (9 Oct 2026, after S4 Ingestion).** Checkpoint 1 passed on 6 Oct; S4's protected scope (page, slide and timestamp citations, topics, the demo notebook with video) passed on 9 Oct. The data model, API contract, libraries and repo layout change only through a new line in DECISIONS.md. S5 (chats that remember, custom instructions, the topic boost) passed on 11 Oct.
 
 ## How these docs are organised
 
@@ -71,14 +71,16 @@ Every source is processed once and every model output is cached. The demo course
 
 ## Chat request flow
 
-1. Retrieve: one nearest-neighbour search over the notebook's chunks (top 40), then a rerank in Python that boosts the chat's topic and its prerequisites. With no topic, the whole notebook is searched equally.
-2. Send Gemini the chunks, the format template, the student's custom instructions and, if Study Coach is on, one line about weak prerequisites.
+1. Retrieve: one nearest-neighbour search over the notebook's chunks (top 40), then a rerank in Python that treats chunks of the chat's topic as 0.05 more similar (the prerequisite boost is a Should, not built). With no topic, the whole notebook is searched equally. In a chat with history, the search text is the new question followed by the previous student message (first 500 characters).
+2. Send Gemini the chunks, the student's custom instructions (a STUDENT PREFERENCES block) and, in a chat, the last 6 saved messages (a CONVERSATION block). Not built: the default format template, and the Study Coach line about weak prerequisites.
 3. Gemini returns paragraphs, each citing the chunks it came from. A paragraph with no citation is marked `outside_course` and shown in the "Beyond your course" box.
-4. `POST /v1/notebooks/{nb}/ask` returns the paragraphs **and** the retrieved context; the evaluation harness calls it. Chat messages run the same function, then save the message and record a chat signal for the learner model.
+4. `POST /v1/notebooks/{nb}/ask` returns the paragraphs **and** the retrieved context; the evaluation harness calls it. Chat messages (chats_send) run the same function, run_answer_pipeline, then save both messages in one transaction; recording a chat signal for the learner model is wired in S7.
 
 **S4 state (9 Oct):** `/ask` embeds the question with BGE's query instruction, takes the top 40 chunks by cosine distance, drops chunks of sources that aren't ready, and keeps the top 10 with at most 5 video chunks (backfilled with video only when fewer than 10 others exist); there is no rerank yet (S5 adds the topic and prerequisite boost, the format template and the custom instructions). The chunks go to Gemini as numbered `<<<SOURCE n>>>` blocks headed with the title and the page, or "at m:ss" for video, with the question last; Gemini cites numbers, which the backend maps to chunk IDs, dropping unknown numbers and chunks with neither a page nor a time. `build_citation` in `backend/app/chat/citations.py` builds every citation: "{title} p. {printed page}" (plus " (slide n)" and open.bbox on slides) for PDFs, and "{title}, m:ss" with a YouTube link for video, whose start is refined to the 2-segment window that best matches the citing paragraph (local embeddings, no Gemini). With `allow_outside` false (the default), a question the sources don't answer gets one uncited "not covered" paragraph.
 
 **Model chain (L1):** all Gemini calls go through `backend/app/llm/`, with JSON output against a Pydantic schema. The cache is checked under every model in the chain (`GEMINI_MODEL`, then `GEMINI_FALLBACK_MODELS`) before any call. Each model gets up to 3 attempts on 5xx errors, timeouts and connection errors; a 429 moves to the next model at once and, with 2 or more models, skips that model until its retry time; any other 4xx stops the chain (a logged 500). One 150 s deadline per request caps every attempt's HTTP timeout. The first success is cached under the answering model's key, and `/ask` reports that model. If every model is out of quota, the answer is 429 `quota_exhausted`; otherwise 503 `unavailable`.
+
+**S5 state (11 Oct):** `/ask` and chat share `run_answer_pipeline` in `backend/app/chat/answer.py`. Chats live under `members/{uid}/chats` and are allowed on the demo notebook; `chats_list` (no topic filter) lets the frontend find a topic's chat, and a chat is created only when the first message is sent. A turn is saved only after the answer succeeds, in one transaction with `seq` numbers; stored messages keep chunk IDs and scores, and history returns `context` null. `get_recent_chat_messages` feeds the last 6 messages into a CONVERSATION block (each turn cut to 1,500 characters), `get_user_custom_instructions` feeds a STUDENT PREFERENCES block, and `neutralize_markers` spaces out runs of three or more angle brackets in that student text. The extra rules and blocks appear only when present, so a request with no history, preferences or topic produces the same prompt as before, and the ask prompt version stays ask-v2; turns with history are new prompts. Measured: fresh chat answers took 13.6 to 66 s on busy evenings; cached turns take about 1 to 3 s.
 
 ## Long-running work (no job queue)
 
@@ -151,6 +153,16 @@ Status on 10 Oct: the first four checks pass (S4, F2b, FX3). The quiz endpoints 
 - A slide citation opens the right page of the slide handout, with the cited slide highlighted.
 - The Sources button on a topic lists citations from at least two kinds of source (textbook, slides, recitation, video).
 - A quiz on one topic contains MCQ and numerical questions that all passed verification; a wrong answer gets feedback with a citation.
+
+### S5 Chat & grounding (passed 11 Oct)
+
+- A chat on the demo notebook's topic t2 is created with t2's name; another user gets 404 for it.
+- A failed send (409, 429 or 503) saves nothing; a successful turn stores two messages with seq 1 and 2, and the stored context holds only chunk IDs and scores.
+- Sending the same first question twice: the second is served from the cache, with no new llm_cache document.
+- After a reload, chats_list finds the chat and chats_list_messages returns the turns in order.
+- "What is Bayes' rule?" then "Explain that again with a simpler example" in a t2 chat: the second answer re-explains Bayes' rule with a new example and cites the course.
+- Custom instructions change the style of the answer; a whole-notebook chat's first question is served from an answer cached before G1 (the no-extras prompt is unchanged).
+- The topic boost moves a topic chunk 0.04 behind ahead and leaves one 0.06 behind; at most 5 video chunks stay in the top 10.
 
 ## Frontend (state on 10 Oct)
 

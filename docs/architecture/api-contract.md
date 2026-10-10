@@ -49,6 +49,7 @@
 | `GET /v1/notebooks/{nb}/topics/{t}/sources` | The Sources button: the topic's locations as Citations, built by the same function as `/ask` | S4 |
 | `POST /v1/notebooks/{nb}/ask` | Stateless answer; nothing saved, no learner signal. Used by the evaluation harness | S3 (minimal), S5 |
 | `POST /v1/notebooks/{nb}/chats` | `{name?, topic_id?}` → chat | S5 |
+| `GET /v1/notebooks/{nb}/chats` | The caller's chats in this notebook, newest `updated_at` first, no topic filter (`chats_list`) | S5 |
 | `GET /v1/notebooks/{nb}/chats/{c}/messages` | Chat history, paginated | S5 |
 | `POST /v1/notebooks/{nb}/chats/{c}/messages` | Same pipeline as `/ask`, then saves both messages and records a chat signal | S5 |
 | `GET /v1/notebooks/{nb}/question-bank` | Counts per topic, type and status | S6 |
@@ -67,6 +68,7 @@
 
 ```text
 request:  { question, topic_id?, refs? {sources: [source_id]}, allow_outside?: bool }
+          # topic_id: t1-t6 or other (boosts that topic's chunks); refs.sources is accepted but not used for retrieval
 response: { paragraphs: [Paragraph], context: [{chunk_id, text, loc, score}],
             model, latency_ms }
 ```
@@ -74,8 +76,20 @@ response: { paragraphs: [Paragraph], context: [{chunk_id, text, loc, score}],
 **Chat message** (`POST /v1/notebooks/{nb}/chats/{c}/messages`)
 
 ```text
-request:  { text, refs? {sources: [source_id]}, allow_outside?: bool }
-response: { user_message: Message, assistant_message: Message }   # assistant_message includes context
+request:  { text (1-2,000 chars, trimmed), refs? {sources: [source_id] (at most 50, each 1-128 chars)}, allow_outside?: bool }
+response: { user_message: Message, assistant_message: Message, model, latency_ms }
+# operation ID chats_send (200); assistant_message carries the full context; nothing is saved when the answer fails
+# history (chats_list_messages) returns the same Message shape with context null
+```
+
+**Chat** (`chats_create` 201, `chats_list`, `chats_list_messages`)
+
+```text
+{ id, name, topic_id (t1-t6, other or null), created_at, updated_at, message_count }
+# POST body {name? (1-100 chars), topic_id?}; default name: the topic's name or "Whole notebook"
+# chats_list: ?limit (1-50, default 20) & cursor (a chat ID) -> {items, next_cursor}
+# chats_list_messages: ?limit (1-100, default 30) & cursor (a message ID); pages newest first,
+#   items oldest first within a page; next_cursor = the oldest message's ID in the page, or null
 ```
 
 **Source** (returned by upload and list)
