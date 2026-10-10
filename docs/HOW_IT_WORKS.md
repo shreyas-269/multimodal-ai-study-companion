@@ -647,3 +647,21 @@ Template for each feature:
 - *What does Study Coach change here?* Nothing yet. The quiz works the same with it on or off, and the score summary works with it off. Recording each answer into per-topic mastery, and the adaptive quiz that picks weak topics, arrive with Study Coach.
 - *How was it tested before the real question bank existed?* A throwaway script seeded a scratch notebook with ten test questions covering both question types, all three difficulties, both maths notations and a topic with no questions, so every screen could be clicked through in the browser; the notebook was deleted afterwards. The final check then ran against the demo course's real, verified questions.
 - *What went wrong while building it?* The plan went through one review and two rechecks before any code. They caught a topic preselection that would have come back after Quit, a double press of Enter that could send two answers, retries that would have re-sent requests on their own, and a Markdown change that would have stripped images from Ask answers. The build's verify then found that a failed finish showed no message and that Quit was disabled while a request was in flight; both were fixed and re-verified before the browser test.
+
+---
+
+## FX4 · Demo front door
+
+**What it does:** The notebooks page now introduces the demo course instead of listing it as one row among many. Above "Your notebooks" there's a card with the demo notebook's name, a "Demo" badge, one sentence on what's inside (MIT 6.041 Probability, lectures 1–6: videos, slides, recitations and a textbook extract) and what you can do with it, and an "Open the demo notebook" button. Your own notebooks are listed below it, and the demo no longer appears twice.
+
+**Data flow:** no new requests. The page's existing `GET /v1/notebooks` query returns the demo notebook first on page 1 only (a backend rule from C1) → the page takes the item with `is_demo` true from the first page, renders it with `DemoNotebookCard`, and leaves it out of the list → the list, "Load more", the create form and the empty state for a new account work exactly as before. The description text lives only in `lib/site.ts`, beside the product name and tagline.
+
+**Main files:**
+- `frontend/components/demo-notebook-card.tsx`: the card.
+- `frontend/app/notebooks/page.tsx`: picks the demo from the first page and keeps it out of the list.
+- `frontend/lib/site.ts`: `DEMO_NOTEBOOK_DESCRIPTION`.
+
+**A judge might ask… / my answer:**
+- *Why a separate card?* Most visitors, judges especially, will only ever open the demo. A card that says what's in it and what to try gets them there in one click, instead of leaving them to guess which row matters.
+- *Why no extra request?* The backend already returns the demo first, on page 1 only, so the page has everything it needs. A separate "get the demo" call would be one more thing to load and fail.
+- *Why is the description in `lib/site.ts`?* All product copy that might change before submission (name, tagline, guest hint, and now this) lives in one file, so a wording change is one edit.
