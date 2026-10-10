@@ -665,3 +665,22 @@ Template for each feature:
 - *Why a separate card?* Most visitors, judges especially, will only ever open the demo. A card that says what's in it and what to try gets them there in one click, instead of leaving them to guess which row matters.
 - *Why no extra request?* The backend already returns the demo first, on page 1 only, so the page has everything it needs. A separate "get the demo" call would be one more thing to load and fail.
 - *Why is the description in `lib/site.ts`?* All product copy that might change before submission (name, tagline, guest hint, and now this) lives in one file, so a wording change is one edit.
+
+---
+
+## FX6 · PDF viewer zoom
+
+**What it does:** The PDF viewer can zoom: Fit (the page fills the panel, as before), 125%, 150%, 200% and 300%, with − and + buttons, a label showing the level, and a "Fit width" button. A zoomed page scrolls inside the viewer in both directions while the toolbar stays in view, the outline around a cited slide stays exactly on that slide at every level, and text can still be selected and copied. When you're zoomed in and click a slide citation, the viewer scrolls by itself so the outlined slide is in view. The zoom stays while you page through a source and goes back to Fit when you open a different one.
+
+**Data flow:** no requests change. Zoom is state inside `PdfViewer`: the rendered page width is the measured panel width (from the existing `ResizeObserver`) times the zoom factor, passed to react-pdf's `Page`, which re-renders the canvas and the text layer at that size → only when zoomed, the area holding the page gets a maximum height (70% of the screen height on narrow screens; from 1024 px, the screen height minus 13.5rem, which leaves room for the top bar, the viewer header and the toolbar), so it scrolls on its own → the slide outline from `lib/pdf-highlight.ts` is positioned in percentages of the rendered page, so it scales with it → when a citation lands on a page with a bbox while zoomed, the viewer waits for the page to render, then sets its own scroll position so the outline's centre is in the middle of the visible area; each citation is handled once, and changing the zoom never scrolls by itself → opening a different source remounts the viewer (it's keyed by source ID), which resets the zoom.
+
+**Main files:**
+- `frontend/components/pdf-viewer.tsx`: the zoom controls, the zoomed width, the zoom-only height bound and the scroll-to-outline.
+- `frontend/lib/pdf-highlight.ts`: the outline's position as percentages of the rendered page.
+
+**A judge might ask… / my answer:**
+- *Why add zoom?* Reading the cited page beside the answer is the core of the app, and the viewer gets under half the window. A slide handout fits four slides on a page, so each slide is tiny at that width. One click to 150% or 200% makes it readable, and every citation after that lands right on the slide.
+- *How does the outline stay on the right slide when zoomed?* It's positioned in percentages of the rendered page rather than in fixed pixels, so when the page grows, the outline grows with it. The bbox is stored in the page's displayed (rotated) coordinates at ingestion, so rotated pages line up too.
+- *Why does the viewer scroll itself only when zoomed?* At Fit the whole page width is already visible. When zoomed, the outlined slide may be off screen, so the viewer centres it. It moves only its own scroll area, never the page around it, which matters on phones, where the panels are stacked.
+- *Why not remember the zoom between visits?* A zoom that suits one source is wrong for the next (a dense textbook page versus a four-slide handout), so each source starts at Fit.
+- *What went wrong while building it?* Lint and build passed, but the verify found that the zoomed page couldn't scroll vertically inside the viewer: a scroll area only scrolls when its height is limited, and nothing limited it, so the outer panel scrolled instead and a cited slide in the bottom half of a page was never brought into view. The height is now bounded only while zoomed, so Fit stays exactly as before. The verify also caught that the first zoom after a citation would jump to that old outline; each citation is now handled once, and zoom changes never scroll.
