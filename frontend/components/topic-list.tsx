@@ -11,6 +11,8 @@ export interface TopicListProps {
   notebookId: string;
   uid: string;
   onQuiz?: (topicId: string) => void;
+  onChat?: (topicId: string) => void;
+  chatDisabled?: boolean;
 }
 
 interface TopicItemRowProps {
@@ -23,6 +25,8 @@ interface TopicItemRowProps {
   onShowAllSources: () => void;
   topicNameMap: Map<string, string>;
   onQuiz?: (topicId: string) => void;
+  onChat?: (topicId: string) => void;
+  chatDisabled?: boolean;
 }
 
 function TopicItemRow({
@@ -35,6 +39,8 @@ function TopicItemRow({
   onShowAllSources,
   topicNameMap,
   onQuiz,
+  onChat,
+  chatDisabled,
 }: TopicItemRowProps) {
   const sourcesQuery = useQuery({
     queryKey: ["topic-sources", uid, notebookId, topic.id],
@@ -76,6 +82,19 @@ function TopicItemRow({
           )}
         </div>
         <div className="flex items-center gap-1 shrink-0">
+          {onChat && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={() => onChat(topic.id)}
+              disabled={chatDisabled}
+              aria-label={`Chat about ${topic.name}`}
+            >
+              Chat
+            </Button>
+          )}
           {onQuiz && (
             <Button
               type="button"
@@ -153,7 +172,7 @@ function TopicItemRow({
   );
 }
 
-export function TopicList({ notebookId, uid, onQuiz }: TopicListProps) {
+export function TopicList({ notebookId, uid, onQuiz, onChat, chatDisabled }: TopicListProps) {
   const [expandedTopicId, setExpandedTopicId] = useState<string | null>(null);
   const [showAllSources, setShowAllSources] = useState(false);
 
@@ -207,6 +226,8 @@ export function TopicList({ notebookId, uid, onQuiz }: TopicListProps) {
             onShowAllSources={() => setShowAllSources(true)}
             topicNameMap={topicNameMap}
             onQuiz={onQuiz}
+            onChat={onChat}
+            chatDisabled={chatDisabled}
           />
         ))}
       </ul>

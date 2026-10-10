@@ -2,24 +2,27 @@
 
 import { CitationChip } from "@/components/citation-chip";
 import { formatCitationTime } from "@/lib/format";
-import type { AskResponse } from "@/lib/api";
+import type { AskResponse, ContextChunk, Paragraph } from "@/lib/api";
 import { MarkdownMath, normalizeMathDelimiters } from "@/components/markdown-math";
 
 export { normalizeMathDelimiters };
 
-interface AnswerViewProps {
-  response: AskResponse;
+export interface AnswerContentProps {
+  paragraphs?: Paragraph[] | null;
+  context?: ContextChunk[] | null;
   sourceMap: Map<string, string>;
 }
 
-export function AnswerView({ response, sourceMap }: AnswerViewProps) {
-  const courseParagraphs = response.paragraphs.filter((p) => !p.outside_course);
-  const outsideParagraphs = response.paragraphs.filter((p) => p.outside_course);
+export function AnswerContent({
+  paragraphs,
+  context,
+  sourceMap,
+}: AnswerContentProps) {
+  const allParagraphs = paragraphs ?? [];
+  const courseParagraphs = allParagraphs.filter((p) => !p.outside_course);
+  const outsideParagraphs = allParagraphs.filter((p) => p.outside_course);
 
-  const renderParagraph = (
-    p: (typeof response.paragraphs)[number],
-    pIndex: number
-  ) => {
+  const renderParagraph = (p: Paragraph, pIndex: number) => {
     return (
       <div key={p.id || `p-${pIndex}`} className="space-y-2">
         <div className="text-sm leading-relaxed">
@@ -63,13 +66,13 @@ export function AnswerView({ response, sourceMap }: AnswerViewProps) {
       )}
 
       {/* Collapsed passages used */}
-      {response.context && response.context.length > 0 && (
+      {context && context.length > 0 && (
         <details className="text-xs text-muted-foreground border-t pt-2">
           <summary className="cursor-pointer font-medium hover:text-foreground">
-            Passages used ({response.context.length})
+            Passages used ({context.length})
           </summary>
           <div className="mt-2 space-y-2 pl-2 border-l">
-            {response.context.map((chunk, idx) => {
+            {context.map((chunk, idx) => {
               const isVideo =
                 chunk.loc.t_start_s != null && chunk.loc.page == null;
               let locLabel: string;
@@ -105,5 +108,20 @@ export function AnswerView({ response, sourceMap }: AnswerViewProps) {
         </details>
       )}
     </div>
+  );
+}
+
+export interface AnswerViewProps {
+  response: AskResponse;
+  sourceMap: Map<string, string>;
+}
+
+export function AnswerView({ response, sourceMap }: AnswerViewProps) {
+  return (
+    <AnswerContent
+      paragraphs={response.paragraphs}
+      context={response.context}
+      sourceMap={sourceMap}
+    />
   );
 }

@@ -278,6 +278,109 @@ export async function ask(
   );
 }
 
+// --- Chat Types (derived from generated schemas & operations) ---
+export type ChatCreateRequest = operations["chats_create"]["requestBody"]["content"]["application/json"];
+export type ChatItem = operations["chats_create"]["responses"][201]["content"]["application/json"];
+export type ChatListResponse = operations["chats_list"]["responses"][200]["content"]["application/json"];
+
+export type ChatMessageListResponse = operations["chats_list_messages"]["responses"][200]["content"]["application/json"];
+export type ChatMessageItem = ChatMessageListResponse["items"][number];
+
+export type ChatSendRequest = operations["chats_send"]["requestBody"]["content"]["application/json"];
+export type ChatSendResponse = operations["chats_send"]["responses"][200]["content"]["application/json"];
+
+// Aliases from schemas for components
+export type ChatOut = components["schemas"]["ChatOut"];
+export type MessageOut = components["schemas"]["MessageOut"];
+export type ContextChunk = components["schemas"]["ContextChunk"];
+export type Paragraph = components["schemas"]["Paragraph"];
+
+/**
+ * Creates a new chat in a notebook.
+ * Operation ID: chats_create
+ * POST /v1/notebooks/{nb}/chats
+ */
+export async function createChat(
+  notebookId: string,
+  body: ChatCreateRequest
+): Promise<ChatItem> {
+  return apiFetch<ChatItem>(
+    `/v1/notebooks/${encodeURIComponent(notebookId)}/chats`,
+    {
+      method: "POST",
+      body,
+      signal: AbortSignal.timeout(30000),
+      timeoutMessage: "Creating the chat took too long. Try again.",
+    }
+  );
+}
+
+/**
+ * Lists chats for the caller in this notebook, ordered by updated_at descending.
+ * Operation ID: chats_list
+ * GET /v1/notebooks/{nb}/chats?limit=&cursor=
+ */
+export async function listChats(
+  notebookId: string,
+  cursor?: string,
+  limit: number = 50 // backend max is 50
+): Promise<ChatListResponse> {
+  const query = new URLSearchParams({ limit: String(limit) });
+  if (cursor) query.set("cursor", cursor);
+  return apiFetch<ChatListResponse>(
+    `/v1/notebooks/${encodeURIComponent(notebookId)}/chats?${query.toString()}`,
+    {
+      signal: AbortSignal.timeout(30000),
+      timeoutMessage: "Loading chats took too long. Try again.",
+    }
+  );
+}
+
+/**
+ * Lists messages for a chat, paginated backwards and returned in chronological order per page.
+ * Operation ID: chats_list_messages
+ * GET /v1/notebooks/{nb}/chats/{c}/messages?limit=&cursor=
+ */
+export async function listChatMessages(
+  notebookId: string,
+  chatId: string,
+  cursor?: string,
+  limit: number = 30
+): Promise<ChatMessageListResponse> {
+  const query = new URLSearchParams({ limit: String(limit) });
+  if (cursor) query.set("cursor", cursor);
+  return apiFetch<ChatMessageListResponse>(
+    `/v1/notebooks/${encodeURIComponent(notebookId)}/chats/${encodeURIComponent(chatId)}/messages?${query.toString()}`,
+    {
+      signal: AbortSignal.timeout(30000),
+      timeoutMessage: "Loading messages took too long. Try again.",
+    }
+  );
+}
+
+/**
+ * Sends a message in a chat, running the grounded answering pipeline.
+ * Operation ID: chats_send
+ * POST /v1/notebooks/{nb}/chats/{c}/messages
+ * Plain async call with 180s browser timeout. No retry.
+ */
+export async function sendChatMessage(
+  notebookId: string,
+  chatId: string,
+  body: ChatSendRequest
+): Promise<ChatSendResponse> {
+  return apiFetch<ChatSendResponse>(
+    `/v1/notebooks/${encodeURIComponent(notebookId)}/chats/${encodeURIComponent(chatId)}/messages`,
+    {
+      method: "POST",
+      body,
+      signal: AbortSignal.timeout(180000),
+      timeoutMessage:
+        "The AI model is slow right now. Try again in a minute; if it finished in the background, the answer often comes back straight away.",
+    }
+  );
+}
+
 // Raw Quiz Types from api-types
 export type QuestionBankResponse = operations["question_bank_get"]["responses"][200]["content"]["application/json"];
 export type QuestionBankItem = components["schemas"]["QuestionBankItem"];

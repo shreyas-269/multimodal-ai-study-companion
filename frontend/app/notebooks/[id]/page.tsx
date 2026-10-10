@@ -10,22 +10,18 @@ import { AccountBar } from "@/components/account-bar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { AnswerView } from "@/components/answer";
 import {
   ApiError,
   getNotebook,
   listSources,
   uploadSource,
-  ask,
-  type AskRequest,
-  type AskResponse,
 } from "@/lib/api";
 import { ViewerProvider, useViewer } from "@/components/viewer-context";
 import { SourceCard } from "@/components/source-card";
 import { TopicList } from "@/components/topic-list";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { QuizPanel } from "@/components/quiz/quiz-panel";
+import { ChatPanel } from "@/components/chat-panel";
 
 const PdfViewer = dynamic(
   () => import("@/components/pdf-viewer").then((mod) => mod.PdfViewer),
@@ -34,34 +30,6 @@ const PdfViewer = dynamic(
     loading: () => <p className="text-sm text-muted-foreground p-4">Loading PDF viewer…</p>,
   }
 );
-
-interface AnswerItem {
-  id: string;
-  question: string;
-  response: AskResponse;
-}
-
-function formatAskError(err: unknown): string {
-  if (err instanceof ApiError) {
-    if (err.code === "not_ready") {
-      return "This notebook has no processed sources yet.";
-    }
-    if (err.code === "quota_exhausted") {
-      if (err.retryAfterS != null) {
-        return `The AI model's free quota is used up. Try again in ${err.retryAfterS} seconds.`;
-      }
-      return "The AI model's free quota is used up. Try again later.";
-    }
-    if (err.code === "unavailable" || err.status === 503) {
-      return "The AI model is busy. Try again in a minute.";
-    }
-    if (err.code === "timeout") {
-      return "The AI model is slow right now. Try again in a minute; if it finished in the background, the answer often comes back straight away.";
-    }
-    return err.message;
-  }
-  return "Failed to get an answer.";
-}
 
 export default function NotebookDetailPage() {
   const params = useParams<{ id: string }>();
@@ -88,14 +56,15 @@ function NotebookContent() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadMessage, setUploadMessage] = useState<string | null>(null);
 
-  const [activeTab, setActiveTab] = useState<"ask" | "quiz">("ask");
+  const [activeTab, setActiveTab] = useState<"chat" | "quiz">("chat");
   const [quizRequest, setQuizRequest] = useState<{ topicIds: string[]; nonce: number } | null>(null);
   const [hasOpenedQuiz, setHasOpenedQuiz] = useState(false);
 
-  const [question, setQuestion] = useState("");
-  const [allowOutside, setAllowOutside] = useState(false);
-  const [answers, setAnswers] = useState<AnswerItem[]>([]);
-  const [isLongWait, setIsLongWait] = useState(false);
+  const [chatSelection, setChatSelection] = useState<{
+    scope: string | null;
+    chatId: string | "new" | null;
+  }>({ scope: null, chatId: null });
+  const [chatBusy, setChatBusy] = useState(false);
 
   const notebookQuery = useQuery({
     queryKey: ["notebook", user?.uid, id],
@@ -140,39 +109,14 @@ function NotebookContent() {
     },
   });
 
-  const askMutation = useMutation({
-    mutationFn: (data: AskRequest) => ask(id, data),
-    retry: false,
-    onMutate: () => {
-      setIsLongWait(false);
-    },
-    onSettled: () => {
-      setIsLongWait(false);
-    },
-    onSuccess: (response, variables) => {
-      setAnswers((prev) => [
-        {
-          id: `${Date.now()}-${Math.random()}`,
-          question: variables.question,
-          response,
-        },
-        ...prev,
-      ]);
-      setQuestion("");
-    },
-  });
-
-  useEffect(() => {
-    if (!askMutation.isPending) return;
-
-    const timer = setTimeout(() => {
-      setIsLongWait(true);
-    }, 15000);
-
-    return () => {
-      clearTimeout(timer);
-    };
-  }, [askMutation.isPending]);
+  const handleChatFromTopic = (topicId: string) => {
+    if (chatBusy) return;
+    setChatSelection({ scope: topicId, chatId: null });
+    setActiveTab("chat");
+    if (typeof window !== "undefined" && window.innerWidth < 1024) {
+      centreRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  };
 
   const navKey = viewerSource?.navKey;
   useEffect(() => {
@@ -264,27 +208,6 @@ function NotebookContent() {
   }
   const hasReadySource = sources.some((s) => s.status === "ready");
 
-  const handleAskSubmit = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (askMutation.isPending || !hasReadySource) return;
-
-    const trimmed = question.trim();
-    if (!trimmed || trimmed.length > 2000) return;
-
-    setIsLongWait(false);
-    askMutation.mutate({
-      question: trimmed,
-      allow_outside: allowOutside,
-    });
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
-      e.preventDefault();
-      handleAskSubmit();
-    }
-  };
-
   return (
     <div className="flex min-h-screen flex-col lg:h-screen">
       <div className="flex flex-wrap items-center gap-3 border-b px-4 py-2">
@@ -322,6 +245,8 @@ function NotebookContent() {
                 centreRef.current?.scrollIntoView({ behavior: "smooth" });
               }
             }}
+            onChat={handleChatFromTopic}
+            chatDisabled={chatBusy}
           />
 
           <section className="space-y-3">
@@ -414,13 +339,13 @@ function NotebookContent() {
 
         <section
           ref={centreRef}
-          aria-label="Ask and quiz"
+          aria-label="Chat and quiz"
           className="min-w-0 flex-1 flex flex-col lg:min-h-0 lg:overflow-hidden"
         >
           <Tabs
             value={activeTab}
             onValueChange={(val) => {
-              if (val === "ask" || val === "quiz") {
+              if (val === "chat" || val === "quiz") {
                 setActiveTab(val);
                 if (val === "quiz") setHasOpenedQuiz(true);
               }
@@ -429,141 +354,26 @@ function NotebookContent() {
           >
             <div className="border-b px-6 py-2 shrink-0">
               <TabsList>
-                <TabsTrigger value="ask">Ask</TabsTrigger>
+                <TabsTrigger value="chat">Chat</TabsTrigger>
                 <TabsTrigger value="quiz">Quiz</TabsTrigger>
               </TabsList>
             </div>
 
             <TabsContent
-              value="ask"
+              value="chat"
               keepMounted
-              className="min-w-0 flex-1 lg:overflow-y-auto mt-0 data-[hidden]:hidden [&[hidden]]:hidden"
+              className="min-w-0 flex flex-col flex-none h-[70vh] lg:flex-1 lg:h-auto lg:min-h-0 mt-0 data-[hidden]:hidden [&[hidden]]:hidden"
             >
-              <div className="mx-auto w-full max-w-3xl space-y-6 p-6">
-                <div className="space-y-1">
-                  <h2 className="text-lg font-semibold">Ask your sources</h2>
-                  <p className="text-xs text-muted-foreground">
-                    Ask questions grounded directly in your uploaded materials.
-                  </p>
-                </div>
-
-                {sourcesQuery.isPending ? (
-                  <div className="rounded-lg border p-4 bg-muted/20">
-                    <p className="text-sm text-muted-foreground">
-                      Loading sources…
-                    </p>
-                  </div>
-                ) : !hasReadySource ? (
-                  <div className="rounded-lg border p-4 bg-muted/20">
-                    <p className="text-sm text-muted-foreground">
-                      Upload a PDF and wait until it&apos;s ready before asking.
-                    </p>
-                  </div>
-                ) : (
-                  <form onSubmit={handleAskSubmit} className="space-y-4">
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <Label htmlFor="ask-question">Question</Label>
-                        <span className="text-xs text-muted-foreground">
-                          {question.length}/2000
-                        </span>
-                      </div>
-                      <Textarea
-                        id="ask-question"
-                        value={question}
-                        onChange={(e) => setQuestion(e.target.value.slice(0, 2000))}
-                        onKeyDown={handleKeyDown}
-                        placeholder="What would you like to know from your course materials?"
-                        rows={3}
-                        disabled={askMutation.isPending}
-                        required
-                      />
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        id="allow-outside"
-                        checked={allowOutside}
-                        onChange={(e) => setAllowOutside(e.target.checked)}
-                        disabled={askMutation.isPending}
-                        className="h-4 w-4 rounded border-border"
-                      />
-                      <Label htmlFor="allow-outside" className="text-xs font-normal cursor-pointer">
-                        Allow answers beyond my course
-                      </Label>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <Button
-                        type="submit"
-                        disabled={askMutation.isPending || !question.trim()}
-                      >
-                        {askMutation.isPending ? "Thinking…" : "Ask"}
-                      </Button>
-                    </div>
-
-                    {askMutation.isPending && (
-                      <p className="text-sm text-muted-foreground">
-                        {isLongWait
-                          ? "Still working. The AI model is busy, so this can take up to three minutes."
-                          : "Thinking… this usually takes a few seconds, sometimes up to a minute or two."}
-                      </p>
-                    )}
-
-                    {askMutation.isError && (
-                      <div className="p-3 border rounded-lg">
-                        <p className="text-sm text-muted-foreground">
-                          {formatAskError(askMutation.error)}
-                        </p>
-                      </div>
-                    )}
-                  </form>
-                )}
-
-                {/* Answer history for this visit */}
-                {answers.length > 0 && (
-                  <div className="space-y-6 pt-4 border-t">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-sm font-semibold">Answers</h3>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setAnswers([])}
-                        className="text-xs"
-                      >
-                        Clear
-                      </Button>
-                    </div>
-
-                    <div className="space-y-6 divide-y">
-                      {answers.map((item, idx) => (
-                        <div
-                          key={item.id}
-                          className={idx > 0 ? "pt-6 space-y-3" : "space-y-3"}
-                        >
-                          <div className="space-y-1">
-                            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
-                              Question
-                            </p>
-                            <p className="text-sm font-medium">{item.question}</p>
-                          </div>
-
-                          <div className="space-y-1">
-                            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
-                              Answer
-                            </p>
-                            <AnswerView
-                              response={item.response}
-                              sourceMap={sourceMap}
-                            />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
+              <ChatPanel
+                notebookId={id}
+                uid={user.uid}
+                active={activeTab === "chat"}
+                chatSelection={chatSelection}
+                onSelectionChange={setChatSelection}
+                onBusyChange={setChatBusy}
+                hasReadySource={hasReadySource}
+                sourceMap={sourceMap}
+              />
             </TabsContent>
 
             <TabsContent
