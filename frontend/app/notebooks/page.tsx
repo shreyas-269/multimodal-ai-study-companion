@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ApiError, createNotebook, listNotebooks } from "@/lib/api";
+import { DemoNotebookCard } from "@/components/demo-notebook-card";
 
 export default function NotebooksPage() {
   const { user, loading } = useRequireUser();
@@ -66,6 +67,9 @@ export default function NotebooksPage() {
   }
 
   const notebooks = data?.pages.flatMap((page) => page.items) ?? [];
+  const firstPage = data?.pages[0];
+  const demoNotebook = firstPage?.items.find((nb) => nb.is_demo);
+  const userNotebooks = notebooks.filter((nb) => !nb.is_demo);
   const isFirstPageLoaded = !isLoading && !isError && !!data;
   const isAllDemoOrEmpty = notebooks.every((nb) => nb.is_demo);
   const showEmptyState = isFirstPageLoaded && !hasNextPage && isAllDemoOrEmpty;
@@ -106,6 +110,8 @@ export default function NotebooksPage() {
         </form>
       </section>
 
+      {demoNotebook && <DemoNotebookCard notebook={demoNotebook} />}
+
       <section className="space-y-4">
         <h2 className="text-lg font-semibold">Your notebooks</h2>
 
@@ -123,9 +129,9 @@ export default function NotebooksPage() {
           </p>
         )}
 
-        {notebooks.length > 0 && (
+        {userNotebooks.length > 0 && (
           <ul className="divide-y rounded-lg border">
-            {notebooks.map((nb) => (
+            {userNotebooks.map((nb) => (
               <li key={nb.id} className="p-4 hover:bg-muted/50 transition-colors">
                 <Link
                   href={`/notebooks/${encodeURIComponent(nb.id)}`}
