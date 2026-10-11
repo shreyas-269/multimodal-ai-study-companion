@@ -138,3 +138,26 @@ def bank_counts(nb_id: str) -> list[QuestionBankItem]:
 
     items.sort(key=sort_key)
     return items
+
+
+def delete_stale_questions(
+    nb_id: str,
+    topic_id: str,
+    qtype: str,
+    keep_ids: set[str],
+) -> int:
+    """Delete questions for topic and type whose IDs are not in keep_ids, scoped to nb_id."""
+    db = get_db()
+    coll = db.collection(questions_collection_path(nb_id))
+    query = (
+        coll.where(filter=FieldFilter("topic_id", "==", topic_id))
+        .where(filter=FieldFilter("type", "==", qtype))
+    )
+    docs = list(query.stream())
+    to_delete = [doc for doc in docs if doc.id not in keep_ids]
+    for i in range(0, len(to_delete), 500):
+        batch = db.batch()
+        for doc in to_delete[i : i + 500]:
+            batch.delete(doc.reference)
+        batch.commit()
+    return len(to_delete)

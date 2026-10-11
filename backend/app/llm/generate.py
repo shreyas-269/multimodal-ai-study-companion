@@ -5,6 +5,7 @@ import math
 import re
 import threading
 import time
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 
@@ -28,6 +29,8 @@ from app.llm.client import get_genai_client
 from app.llm.exceptions import ModelUnavailable, QuotaExhausted, UnreadableOutput
 
 logger = logging.getLogger(__name__)
+
+MIN_ATTEMPT_S = 10.0
 
 _clock = time.monotonic
 _skip_map: dict[str, float] = {}
@@ -85,14 +88,23 @@ def _call_gemini_api(
     contents: Any,
     config: types.GenerateContentConfig,
     deadline: float | None = None,
+    on_attempt: Callable[[], None] | None = None,
 ) -> types.GenerateContentResponse:
     if deadline is not None:
         left = deadline - _clock()
-        if left < 1.0:
+        if left < MIN_ATTEMPT_S:
             raise TimeoutError("Deadline exceeded before call attempt")
-        config = config.model_copy(
-            update={"http_options": types.HttpOptions(timeout=int(min(60.0, left) * 1000))}
+        base_timeout_s = (
+            config.http_options.timeout / 1000.0
+            if (config.http_options and config.http_options.timeout is not None)
+            else 60.0
         )
+        timeout_ms = int(min(base_timeout_s, left) * 1000)
+        config = config.model_copy(
+            update={"http_options": types.HttpOptions(timeout=timeout_ms)}
+        )
+    if on_attempt is not None:
+        on_attempt()
     client = get_genai_client()
     try:
         return client.models.generate_content(
@@ -114,6 +126,11 @@ def generate_json_with_model[T: BaseModel](
     schema: type[T],
     cache_key_parts: list[str],
     models: list[str] | None = None,
+    *,
+    on_attempt: Callable[[], None] | None = None,
+    max_output_tokens: int = 2000,
+    attempt_timeout_s: float = 60.0,
+    deadline_s: float = 150.0,
 ) -> tuple[T, str]:
     """Return (validated_schema, model_name), checking cache first across chain."""
     settings = get_settings()
@@ -136,12 +153,12 @@ def generate_json_with_model[T: BaseModel](
 
     # 2. Chain execution with monotonic deadline
     start_time = _clock()
-    deadline = start_time + 150.0
+    deadline = start_time + deadline_s
     failures: list[dict[str, Any]] = []
 
     for idx, model in enumerate(chain):
         left = deadline - _clock()
-        if left < 1.0:
+        if left < MIN_ATTEMPT_S:
             failures.append({"type": "budget_exhausted"})
             break
 
@@ -166,18 +183,18 @@ def generate_json_with_model[T: BaseModel](
         # Schema validation retry (up to 2 generation attempts for this model)
         for _ in range(2):
             left = deadline - _clock()
-            if left < 1.0:
+            if left < MIN_ATTEMPT_S:
                 failures.append({"type": "budget_exhausted"})
                 break
 
-            attempt_timeout_ms = int(min(60.0, left) * 1000)
+            attempt_timeout_ms = int(min(attempt_timeout_s, left) * 1000)
             config = types.GenerateContentConfig(
                 response_mime_type="application/json",
                 response_schema=schema,
                 system_instruction=system_instruction,
                 thinking_config=types.ThinkingConfig(thinking_level="low"),
                 automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
-                max_output_tokens=2000,
+                max_output_tokens=max_output_tokens,
                 http_options=types.HttpOptions(timeout=attempt_timeout_ms),
             )
 
@@ -191,6 +208,7 @@ def generate_json_with_model[T: BaseModel](
                     contents=contents,
                     config=config,
                     deadline=deadline,
+                    on_attempt=on_attempt,
                 )
             except QuotaExhausted as exc:
                 if use_skips:
@@ -243,8 +261,9 @@ def generate_json_with_model[T: BaseModel](
             break
 
     # 3. All models in chain failed or budget exhausted
-    if failures and all(f.get("type") == "429" for f in failures):
-        min_wait = max(1, min(f["retry_after_s"] for f in failures))
+    attempted_failures = [f for f in failures if f.get("type") != "budget_exhausted"]
+    if attempted_failures and all(f.get("type") == "429" for f in attempted_failures):
+        min_wait = max(1, min(f["retry_after_s"] for f in attempted_failures))
         raise QuotaExhausted(retry_after_s=min_wait)
 
     raise ModelUnavailable("The AI model is busy right now. Please try again in a minute.")

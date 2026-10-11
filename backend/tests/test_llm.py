@@ -710,3 +710,234 @@ def test_ask_cache_hit_returns_cached_model(
         assert mock_gemini_client.models.generate_content.call_count == 0
     finally:
         settings.gemini_fallback_models = orig_fallback
+
+
+
+# ---------------------------------------------------------------------------
+# Task Q1 Model Chain Timeout and Deadline Tests (Part 2 Fix)
+# ---------------------------------------------------------------------------
+
+
+def test_attempt_skipped_under_10s_left_ends_model_unavailable(
+    monkeypatch, mock_gemini_client, cache_tracker
+):
+    """3a: With fake clock and 9s left before attempt, no call is made and 503 raised."""
+    mock_gemini_client.models.generate_content.reset_mock()
+    current_time = 100.0
+
+    def fake_clock():
+        nonlocal current_time
+        if current_time == 100.0:
+            current_time = 241.0
+            return 100.0
+        return 241.0
+
+    monkeypatch.setattr(generate, "_clock", fake_clock)
+
+    with pytest.raises(ModelUnavailable):
+        generate.generate_json_with_model(
+            prompt_version="v1",
+            system_instruction="sys",
+            contents="q",
+            schema=DummyOutput,
+            cache_key_parts=[f"budget_9s_{uuid4().hex}"],
+            models=["m-test"],
+        )
+
+    assert mock_gemini_client.models.generate_content.call_count == 0
+
+
+def test_attempt_skipped_under_10s_left_ends_quota_exhausted_when_earlier_429(
+    monkeypatch, mock_gemini_client, cache_tracker
+):
+    """3a: With 9s left before fallback, ends in QuotaExhausted when all earlier returned 429."""
+    generate._call_gemini_api.retry.wait = wait_none()
+    mock_gemini_client.models.generate_content.reset_mock()
+
+    current_time = 0.0
+
+    def fake_clock():
+        return current_time
+
+    monkeypatch.setattr(generate, "_clock", fake_clock)
+
+    calls = []
+
+    def fake_generate(model, contents, config):
+        nonlocal current_time
+        calls.append(model)
+        if model == "m-1":
+            current_time = 141.0
+            raise make_client_error_429("25s")
+        raise RuntimeError("m-2 should not be called!")
+
+    mock_gemini_client.models.generate_content.side_effect = fake_generate
+
+    with pytest.raises(QuotaExhausted) as exc_info:
+        generate.generate_json_with_model(
+            prompt_version="v1",
+            system_instruction="sys",
+            contents="q",
+            schema=DummyOutput,
+            cache_key_parts=[f"quota_then_9s_{uuid4().hex}"],
+            models=["m-1", "m-2"],
+        )
+
+    assert exc_info.value.retry_after_s == 25
+    assert calls == ["m-1"]
+    assert mock_gemini_client.models.generate_content.call_count == 1
+
+
+def test_budget_hook_not_called_when_under_10s_left(
+    monkeypatch, mock_gemini_client, cache_tracker
+):
+    """3b: With fake clock and 9s left before attempt, on_attempt hook is NOT called."""
+    mock_gemini_client.models.generate_content.reset_mock()
+    current_time = 100.0
+
+    def fake_clock():
+        nonlocal current_time
+        if current_time == 100.0:
+            current_time = 241.0
+            return 100.0
+        return 241.0
+
+    monkeypatch.setattr(generate, "_clock", fake_clock)
+
+    hook_called = False
+
+    def on_attempt():
+        nonlocal hook_called
+        hook_called = True
+
+    with pytest.raises(ModelUnavailable):
+        generate.generate_json_with_model(
+            prompt_version="v1",
+            system_instruction="sys",
+            contents="q",
+            schema=DummyOutput,
+            cache_key_parts=[f"hook_9s_{uuid4().hex}"],
+            models=["m-test"],
+            on_attempt=on_attempt,
+        )
+
+    assert mock_gemini_client.models.generate_content.call_count == 0
+    assert hook_called is False
+
+    # Also directly verify _call_gemini_api time-left check precedes on_attempt
+    hook_called_direct = False
+
+    def on_attempt_direct():
+        nonlocal hook_called_direct
+        hook_called_direct = True
+
+    with pytest.raises(TimeoutError):
+        generate._call_gemini_api(
+            model="m-test",
+            contents="q",
+            config=generate.types.GenerateContentConfig(),
+            deadline=current_time + 9.0,
+            on_attempt=on_attempt_direct,
+        )
+
+    assert hook_called_direct is False
+
+
+def test_custom_timeouts_and_deadline_respected(
+    monkeypatch, mock_gemini_client, cache_tracker
+):
+    """3c: With timeout=120 and deadline=300, 1st attempt HTTP timeout is 120s and total <= 300s."""
+    generate._call_gemini_api.retry.wait = wait_none()
+
+    sim_time = 0.0
+
+    def fake_now():
+        return sim_time
+
+    def fake_sleep(duration):
+        nonlocal sim_time
+        sim_time += duration
+
+    monkeypatch.setattr(generate, "_clock", fake_now)
+    monkeypatch.setattr("tenacity.time.monotonic", fake_now)
+    monkeypatch.setattr("tenacity.nap.time.sleep", fake_sleep)
+
+    calls = []
+
+    def fake_generate(model, contents, config):
+        nonlocal sim_time
+        timeout_s = config.http_options.timeout / 1000.0
+        calls.append((model, sim_time, timeout_s))
+        sim_time += timeout_s
+        raise TimeoutError(f"{model} timed out")
+
+    mock_gemini_client.models.generate_content.side_effect = fake_generate
+
+    with pytest.raises(ModelUnavailable):
+        generate.generate_json_with_model(
+            prompt_version="v1",
+            system_instruction="sys",
+            contents="q",
+            schema=DummyOutput,
+            cache_key_parts=[f"custom_timeouts_{uuid4().hex}"],
+            models=["m-1", "m-2", "m-3"],
+            attempt_timeout_s=120.0,
+            deadline_s=300.0,
+        )
+
+    assert len(calls) >= 1
+    assert calls[0][2] == 120.0
+
+    for _model, call_start, timeout_s in calls:
+        assert call_start < 300.0
+        assert call_start + timeout_s <= 300.0 + 1e-6
+    assert sim_time <= 300.0
+
+
+def test_default_timeouts_and_deadline_unchanged(
+    monkeypatch, mock_gemini_client, cache_tracker
+):
+    """3d: With no arguments, computed per-attempt timeout is 60s and deadline 150s."""
+    generate._call_gemini_api.retry.wait = wait_none()
+
+    sim_time = 0.0
+
+    def fake_now():
+        return sim_time
+
+    def fake_sleep(duration):
+        nonlocal sim_time
+        sim_time += duration
+
+    monkeypatch.setattr(generate, "_clock", fake_now)
+    monkeypatch.setattr("tenacity.time.monotonic", fake_now)
+    monkeypatch.setattr("tenacity.nap.time.sleep", fake_sleep)
+
+    calls = []
+
+    def fake_generate(model, contents, config):
+        nonlocal sim_time
+        timeout_s = config.http_options.timeout / 1000.0
+        calls.append((model, sim_time, timeout_s))
+        sim_time += timeout_s
+        raise TimeoutError(f"{model} timed out")
+
+    mock_gemini_client.models.generate_content.side_effect = fake_generate
+
+    with pytest.raises(ModelUnavailable):
+        generate.generate_json_with_model(
+            prompt_version="v1",
+            system_instruction="sys",
+            contents="q",
+            schema=DummyOutput,
+            cache_key_parts=[f"default_timeouts_{uuid4().hex}"],
+            models=["m-1", "m-2", "m-3"],
+        )
+
+    assert len(calls) >= 1
+    assert calls[0][2] == 60.0
+
+    for _model, call_start, timeout_s in calls:
+        assert call_start < 150.0
+        assert call_start + timeout_s <= 150.0 + 1e-6
+    assert sim_time <= 150.0

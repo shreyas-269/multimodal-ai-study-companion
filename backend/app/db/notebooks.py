@@ -94,18 +94,21 @@ def rebuild_notebook_status_and_summary(
     """Atomically set sources_summary, counts.chunks, and status on a notebook."""
     db = get_db()
     ref = db.document(notebook_path(nb))
-    doc = ref.get()
-    doc_data = doc.to_dict() or {}
-    counts = doc_data.get("counts", {})
-    counts["chunks"] = total_chunks
-    counts.pop("items", None)
     ref.update(
         {
             "sources_summary": sources_summary,
-            "counts": counts,
+            "counts.chunks": total_chunks,
+            "counts.items": firestore.DELETE_FIELD,
             "status": status,
         }
     )
+
+
+def set_questions_verified(nb: str, count: int) -> None:
+    """Set counts.questions_verified using a field-path update."""
+    db = get_db()
+    ref = db.document(notebook_path(nb))
+    ref.update({"counts.questions_verified": count})
 
 
 def derive_notebook_status(sources_summary: list[dict[str, Any]]) -> str:

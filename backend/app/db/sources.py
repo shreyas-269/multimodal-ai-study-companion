@@ -411,3 +411,24 @@ def get_sources_metadata_by_ids(nb: str, source_ids: list[str]) -> dict[str, dic
             }
     return result
 
+
+
+def get_chunks_by_ids(
+    nb: str,
+    chunk_ids: list[str],
+    field_paths: tuple[str, ...] = ("text", "token_count"),
+) -> dict[str, dict[str, Any]]:
+    """Fetch chunk documents with a field mask, strictly omitting embedding vectors."""
+    if not chunk_ids:
+        return {}
+    db = get_db()
+    result: dict[str, dict[str, Any]] = {}
+    batch_size = 500
+    for i in range(0, len(chunk_ids), batch_size):
+        batch_ids = chunk_ids[i : i + batch_size]
+        refs = [db.document(chunk_path(nb, cid)) for cid in batch_ids]
+        snaps = db.get_all(refs, field_paths=field_paths)
+        for snap in snaps:
+            if snap.exists:
+                result[snap.id] = snap.to_dict() or {}
+    return result
