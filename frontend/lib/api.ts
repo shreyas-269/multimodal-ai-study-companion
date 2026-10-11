@@ -520,4 +520,78 @@ export async function finishQuiz(
   );
 }
 
+// Study Coach Endpoints (F5)
+
+export interface TopicProgressItem {
+  topic_id: string;
+  checked: boolean;
+  p_known: number | null;
+  mastered: boolean | null;
+  n_obs: number | null;
+  last_updated: string | null;
+}
+
+export interface ProgressResponse {
+  study_coach: boolean;
+  items: TopicProgressItem[];
+  next_cursor: null;
+}
+
+export interface NeedsWorkItem {
+  topic_id: string;
+  p_known: number | null;
+  chat_signals: number | null;
+}
+
+export interface NeedsWorkResponse {
+  study_coach: boolean;
+  items: NeedsWorkItem[];
+  next_cursor: null;
+}
+
+export interface TopicCheckedResponse {
+  topic_id: string;
+  checked: boolean;
+}
+
+export async function getProgress(notebookId: string): Promise<ProgressResponse> {
+  return apiFetch<ProgressResponse>(
+    `/v1/notebooks/${encodeURIComponent(notebookId)}/progress`,
+    {
+      signal: AbortSignal.timeout(30000),
+      timeoutMessage: "This is taking longer than it should. Try again in a minute.",
+    }
+  );
+}
+
+export async function getNeedsWork(
+  notebookId: string,
+  limit: number = 3
+): Promise<NeedsWorkResponse> {
+  return apiFetch<NeedsWorkResponse>(
+    `/v1/notebooks/${encodeURIComponent(notebookId)}/needs-work?limit=${encodeURIComponent(limit)}`,
+    {
+      signal: AbortSignal.timeout(30000),
+      timeoutMessage: "This is taking longer than it should. Try again in a minute.",
+    }
+  );
+}
+
+export async function putTopicChecked(
+  notebookId: string,
+  topicId: string,
+  checked: boolean
+): Promise<TopicCheckedResponse> {
+  return apiFetch<TopicCheckedResponse>(
+    `/v1/notebooks/${encodeURIComponent(notebookId)}/topics/${encodeURIComponent(topicId)}/checked`,
+    {
+      method: "PUT",
+      body: { checked },
+      signal: AbortSignal.timeout(30000),
+      timeoutMessage: "The request took too long. Try again.",
+    }
+  );
+}
+
+
 

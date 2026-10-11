@@ -363,6 +363,18 @@ export function ChatPanel({
         queryKey: ["chats", capturedUid, capturedNotebookId],
       });
 
+      // Invalidate Study Coach queries upon topic-associated chat send (F5)
+      const targetChat = chatsQuery.data?.items.find((c) => c.id === targetChatId);
+      const isTopicAssociated = Boolean(targetChat?.topic_id ?? capturedScope);
+      if (isTopicAssociated) {
+        queryClient.invalidateQueries({
+          queryKey: ["progress", capturedUid, capturedNotebookId],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["needs-work", capturedUid, capturedNotebookId],
+        });
+      }
+
       setOptimisticMessage(null);
     } catch (err) {
       setOptimisticMessage(null);

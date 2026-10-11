@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   getQuestionBank,
   createQuiz,
@@ -35,6 +35,7 @@ export function QuizPanel({
   quizRequest,
   hasOpenedQuiz,
 }: QuizPanelProps) {
+  const queryClient = useQueryClient();
   const [phase, setPhase] = useState<QuizPhase>("start");
   const [session, setSession] = useState<QuizSession | null>(null);
   const [selectedTopicIds, setSelectedTopicIds] = useState<string[]>([]);
@@ -212,6 +213,14 @@ export function QuizPanel({
         question_id: currentQ.id,
         answer: answerPayload,
         time_ms,
+      });
+
+      // Invalidate Study Coach queries immediately upon answer commit
+      queryClient.invalidateQueries({
+        queryKey: ["progress", uid, notebookId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["needs-work", uid, notebookId],
       });
 
       if (sessionRef.current !== mySession) return;
