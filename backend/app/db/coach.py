@@ -225,3 +225,36 @@ def get_study_coach_enabled(uid: str) -> bool:
         return False
     data = snap.to_dict() or {}
     return data.get("study_coach") is True
+
+
+def set_topic_checked(notebook_id: str, uid: str, topic_id: str, checked: bool) -> bool:
+    """Update topic checked state on members/{uid} document if needed.
+
+    Reads checked map with field_paths=["checked"].
+    If already in requested state, writes nothing and returns False.
+    Otherwise updates members/{uid} by field path only:
+    FieldPath("checked", topic_id) set to True on tick, DELETE_FIELD on untick.
+    Returns True if an update was written.
+    """
+    from google.cloud.firestore_v1.field_path import FieldPath
+
+    db = get_db()
+    ref = db.document(member_path(notebook_id, uid))
+    snap = ref.get(field_paths=["checked"])
+    checked_map = {}
+    if snap.exists:
+        raw = (snap.to_dict() or {}).get("checked")
+        if isinstance(raw, dict):
+            checked_map = raw
+
+    currently_checked = checked_map.get(topic_id) is True
+    if currently_checked == checked:
+        return False
+
+    fp = FieldPath("checked", topic_id).to_api_repr()
+    if checked:
+        ref.update({fp: True})
+    else:
+        ref.update({fp: firestore.DELETE_FIELD})
+    return True
+
