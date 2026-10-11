@@ -1,3 +1,4 @@
+import logging
 from datetime import UTC, datetime
 from typing import Annotated
 
@@ -7,6 +8,7 @@ from app.api.access import get_readable_notebook, is_valid_notebook_id
 from app.auth import CurrentUser
 from app.chat.answer import run_answer_pipeline
 from app.chat.history import format_chat_history
+from app.coach import record_chat_signal
 from app.db.chats import (
     create_chat_doc,
     get_chat_snapshot,
@@ -17,6 +19,7 @@ from app.db.chats import (
     save_chat_messages_transaction,
 )
 from app.db.client import get_db
+from app.db.coach import coach_storage, get_study_coach_enabled
 from app.db.members import ensure_member
 from app.db.paths import chats_collection_path, messages_collection_path
 from app.db.topics import get_topic_snapshot
@@ -35,6 +38,7 @@ from app.models.citation import Paragraph
 from app.models.notebook import Notebook
 
 router = APIRouter(tags=["chats"])
+logger = logging.getLogger(__name__)
 
 
 @router.post("/notebooks/{nb}/chats", name="create", status_code=status.HTTP_201_CREATED)
@@ -306,6 +310,21 @@ def send_message(
         asst_created_at=asst_created_at,
     )
     # S7: call coach.record_chat_signal here, after the save has committed (Firestore CoachStorage arrives in S7).  # noqa: E501
+    if topic_id is not None:
+        try:
+            if get_study_coach_enabled(current_user.uid):
+                storage = coach_storage(nb, current_user.uid)
+                record_chat_signal(
+                    storage=storage,
+                    nb=nb,
+                    uid=current_user.uid,
+                    topic_id=topic_id,
+                    message_id=user_msg_id,
+                    coach_on=True,
+                    now=datetime.now(UTC),
+                )
+        except Exception:
+            logger.exception("Failed to record chat signal in Study Coach")
 
     user_msg_out = MessageOut(
         id=user_msg_id,

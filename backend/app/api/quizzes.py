@@ -1,3 +1,4 @@
+import logging
 import re
 from datetime import UTC, datetime
 
@@ -6,7 +7,9 @@ from google.cloud import firestore
 
 from app.api.access import get_readable_notebook
 from app.auth import CurrentUser
+from app.coach import record_quiz_answer
 from app.db.client import get_db
+from app.db.coach import coach_storage, get_study_coach_enabled
 from app.db.members import default_member_data
 from app.db.paths import (
     attempt_path,
@@ -30,6 +33,7 @@ from app.models.quiz import (
 from app.questions.quiz import QuizInputError, build_feedback, grade, select_questions
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.get("/notebooks/{nb}/question-bank", tags=["question_bank"], name="get")
@@ -367,7 +371,22 @@ def answer(
 
     attempt_record, already_answered = answer_tx(transaction)
 
-    # Integration hook: # S7: record_quiz_answer(nb, current_user.uid, attempt_record)
+    try:
+        if get_study_coach_enabled(current_user.uid):
+            storage = coach_storage(nb, current_user.uid)
+            record_quiz_answer(
+                storage=storage,
+                nb=nb,
+                uid=current_user.uid,
+                topic_id=attempt_record.get("topic_id", question.topic_id),
+                attempt_id=f"{q}_{body.question_id}",
+                question_type=attempt_record.get("type", question.type),
+                score=float(attempt_record.get("score", 0.0)),
+                coach_on=True,
+                now=datetime.now(UTC),
+            )
+    except Exception:
+        logger.exception("Failed to record quiz answer in Study Coach")
 
     feedback = build_feedback(question, attempt_record)
 

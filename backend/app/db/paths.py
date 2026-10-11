@@ -110,3 +110,24 @@ def messages_collection_path(nb: str, uid: str, chat_id: str) -> str:
 def message_path(nb: str, uid: str, chat_id: str, msg_id: str) -> str:
     """Return Firestore document path for a chat message."""
     return f"notebooks/{nb}/members/{uid}/chats/{chat_id}/messages/{msg_id}"
+
+
+def mastery_collection_path(nb: str, uid: str) -> str:
+    """Return Firestore collection path for a member's topic mastery."""
+    return f"notebooks/{nb}/members/{uid}/mastery"
+
+
+def mastery_path(nb: str, uid: str, topic_id: str) -> str:
+    """Return Firestore document path for a member's topic mastery."""
+    return f"notebooks/{nb}/members/{uid}/mastery/{topic_id}"
+
+
+def coach_events_collection_path(nb: str, uid: str) -> str:
+    """Return Firestore collection path for a member's coach events."""
+    return f"notebooks/{nb}/members/{uid}/coach_events"
+
+
+def coach_event_path(nb: str, uid: str, event_id: str) -> str:
+    """Return Firestore document path for a member's coach event."""
+    return f"notebooks/{nb}/members/{uid}/coach_events/{event_id}"
+
