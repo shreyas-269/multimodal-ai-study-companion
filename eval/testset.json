@@ -1,0 +1,890 @@
+[
+  {
+    "id": "eval-lec-01",
+    "category": "lecture_example",
+    "source_modality": "video",
+    "topic_id": "t1",
+    "in_course": true,
+    "question": "In the Lecture 1 coin tossing experiment where a coin is tossed until heads appears for the first time with probability law P(n) = 2^(-n), what is the probability that the outcome is an even number?",
+    "reference_answer": "The probability is 1/3. By the countable additivity axiom, the probability that the outcome is an even number is the sum over all even integers n = 2, 4, 6, ... of 2^(-n). This is the infinite geometric series sum_{k=1}^infty 2^(-2k) = sum_{k=1}^infty (1/4)^k = (1/4) / (1 - 1/4) = 1/3.",
+    "acceptable_variations": [
+      "1/3",
+      "one third",
+      "0.333",
+      "0.33",
+      "one-third"
+    ],
+    "key_terms": [
+      "1 third",
+      "even",
+      "geometric series",
+      "countable additivity",
+      "2 to the minus n"
+    ],
+    "expected_sources": [
+      {
+        "source_id": "src_l01",
+        "file_rel": "videos/L01.mp4",
+        "location_type": "video",
+        "page": null,
+        "page_label": null,
+        "slide": null,
+        "t_start_s": 2819.0,
+        "t_end_s": 2998.0,
+        "youtube_id": "j9WZyLZCBzs"
+      }
+    ],
+    "multi_turn": null
+  },
+  {
+    "id": "eval-lec-02",
+    "category": "lecture_example",
+    "source_modality": "video",
+    "topic_id": "t2",
+    "in_course": true,
+    "question": "In the radar detection example from Lecture 2, if an airplane is present with probability 0.05 and the radar correctly registers a detection with probability 0.99 when a plane is present, what is the probability that a plane is present and the radar registers a detection?",
+    "reference_answer": "0.0495 (or 4.95%). By the multiplication rule, P(Plane and Detection) = P(Plane) * P(Detection | Plane) = 0.05 * 0.99 = 0.0495.",
+    "acceptable_variations": [
+      "0.0495",
+      "4.95%",
+      "99/2000",
+      "0.05 * 0.99"
+    ],
+    "key_terms": [
+      "radar",
+      "plane",
+      "0.05",
+      "0.99",
+      "conditional probabilities"
+    ],
+    "expected_sources": [
+      {
+        "source_id": "src_l02",
+        "file_rel": "videos/L02.mp4",
+        "location_type": "video",
+        "page": null,
+        "page_label": null,
+        "slide": null,
+        "t_start_s": 1515.0,
+        "t_end_s": 1710.0,
+        "youtube_id": "TluTv5V0RmE"
+      }
+    ],
+    "multi_turn": null
+  },
+  {
+    "id": "eval-lec-03",
+    "category": "lecture_example",
+    "source_modality": "video",
+    "topic_id": "t3",
+    "in_course": true,
+    "question": "In the Lecture 3 royal family example with two children (assuming each child is equally likely a boy or girl independently), given that at least one child is a boy who became king, what is the probability that the king's sibling is female?",
+    "reference_answer": "The probability is 2/3. Given that there is a king, at least one of the two children is a boy, which eliminates the girl-girl outcome. In the conditional sample space of three equally likely outcomes (boy-boy, boy-girl, girl-boy), the king's sibling is female in two of the three outcomes.",
+    "acceptable_variations": [
+      "2/3",
+      "two thirds",
+      "0.667",
+      "0.67",
+      "two-thirds"
+    ],
+    "key_terms": [
+      "2 thirds",
+      "king",
+      "sibling",
+      "sample space",
+      "boy"
+    ],
+    "expected_sources": [
+      {
+        "source_id": "src_l03",
+        "file_rel": "videos/L03.mp4",
+        "location_type": "video",
+        "page": null,
+        "page_label": null,
+        "slide": null,
+        "t_start_s": 2495.0,
+        "t_end_s": 2715.0,
+        "youtube_id": "19Ql_Q3l0GA"
+      }
+    ],
+    "multi_turn": null
+  },
+  {
+    "id": "eval-lec-04",
+    "category": "lecture_example",
+    "source_modality": "video",
+    "topic_id": "t4",
+    "in_course": true,
+    "question": "In the Lecture 4 dice rolling example, what is the probability that six rolls of a fair six-sided die all show different numbers?",
+    "reference_answer": "The probability is 6! / 6^6 = 720 / 46656 = 5 / 324 (approximately 0.01543). There are 6^6 total possible roll sequences, and 6! sequences where all rolls yield distinct values.",
+    "acceptable_variations": [
+      "5/324",
+      "720/46656",
+      "6!/6^6",
+      "0.0154",
+      "0.01543"
+    ],
+    "key_terms": [
+      "six factorial",
+      "six to the sixth",
+      "permutations",
+      "different numbers"
+    ],
+    "expected_sources": [
+      {
+        "source_id": "src_l04",
+        "file_rel": "videos/L04.mp4",
+        "location_type": "video",
+        "page": null,
+        "page_label": null,
+        "slide": null,
+        "t_start_s": 799.0,
+        "t_end_s": 965.0,
+        "youtube_id": "6oV3pKLgW2I"
+      }
+    ],
+    "multi_turn": null
+  },
+  {
+    "id": "eval-lec-05",
+    "category": "lecture_example",
+    "source_modality": "video",
+    "topic_id": "t5",
+    "in_course": true,
+    "question": "In Lecture 5, why is the probability mass function for the number of coin tosses until the first heads called a geometric PMF?",
+    "reference_answer": "It is called a geometric PMF because the probabilities p_X(k) = (1-p)^(k-1) * p for k = 1, 2, 3, ... correspond to the successive terms of a geometric progression (or geometric sequence).",
+    "acceptable_variations": [
+      "terms of a geometric progression",
+      "geometric sequence",
+      "geometric progression"
+    ],
+    "key_terms": [
+      "geometric PMF",
+      "geometric progression",
+      "first head",
+      "1 minus p"
+    ],
+    "expected_sources": [
+      {
+        "source_id": "src_l05",
+        "file_rel": "videos/L05.mp4",
+        "location_type": "video",
+        "page": null,
+        "page_label": null,
+        "slide": null,
+        "t_start_s": 986.0,
+        "t_end_s": 1085.0,
+        "youtube_id": "3MOahpLxj6A"
+      }
+    ],
+    "multi_turn": null
+  },
+  {
+    "id": "eval-lec-06",
+    "category": "lecture_example",
+    "source_modality": "video",
+    "topic_id": "t6",
+    "in_course": true,
+    "question": "In Lecture 6, how do you obtain the marginal PMF of X from a two-dimensional joint PMF table of random variables X and Y?",
+    "reference_answer": "You fix x and sum the values of the joint PMF p_{X,Y}(x, y) over all possible values of y: p_X(x) = sum_y p_{X,Y}(x, y). In tabular representation, this corresponds to summing all entries across the slice (row or column) corresponding to that fixed x.",
+    "acceptable_variations": [
+      "sum over y",
+      "summing across a slice",
+      "p_X(x) = sum_y p_{X,Y}(x,y)"
+    ],
+    "key_terms": [
+      "marginal PMF",
+      "joint PMF",
+      "slice",
+      "adding up",
+      "fixed"
+    ],
+    "expected_sources": [
+      {
+        "source_id": "src_l06",
+        "file_rel": "videos/L06.mp4",
+        "location_type": "video",
+        "page": null,
+        "page_label": null,
+        "slide": null,
+        "t_start_s": 2638.0,
+        "t_end_s": 2792.0,
+        "youtube_id": "-qCEoqpwjf4"
+      }
+    ],
+    "multi_turn": null
+  },
+  {
+    "id": "eval-slide-01",
+    "category": "lecture_slide",
+    "source_modality": "slide",
+    "topic_id": "t1",
+    "in_course": true,
+    "question": "According to Lecture 1 slides, what two essential properties must the list of possible outcomes in a sample space satisfy?",
+    "reference_answer": "The list of outcomes in a sample space Omega must be mutually exclusive and collectively exhaustive (and described at the right granularity).",
+    "acceptable_variations": [
+      "mutually exclusive and collectively exhaustive",
+      "mutually exclusive, collectively exhaustive"
+    ],
+    "key_terms": [
+      "mutually exclusive",
+      "collectively exhaustive",
+      "sample space"
+    ],
+    "expected_sources": [
+      {
+        "source_id": "src_l01_slides",
+        "file_rel": "slides/L01-slides.pdf",
+        "location_type": "slide",
+        "page": 1,
+        "page_label": "1",
+        "slide": 4,
+        "t_start_s": null,
+        "t_end_s": null,
+        "youtube_id": null
+      }
+    ],
+    "multi_turn": null
+  },
+  {
+    "id": "eval-slide-02",
+    "category": "lecture_slide",
+    "source_modality": "slide",
+    "topic_id": "t2",
+    "in_course": true,
+    "question": "State the Total Probability Theorem for a partition of the sample space into events A1, A2, and A3 as presented on the Lecture 2 slides.",
+    "reference_answer": "For a partition of the sample space into A1, A2, A3, the Total Probability Theorem states that P(B) = P(A1)P(B|A1) + P(A2)P(B|A2) + P(A3)P(B|A3).",
+    "acceptable_variations": [
+      "P(B) = P(A1)P(B|A1) + P(A2)P(B|A2) + P(A3)P(B|A3)",
+      "P(B) = sum P(Ai)P(B|Ai)",
+      "divide and conquer"
+    ],
+    "key_terms": [
+      "total probability theorem",
+      "partition",
+      "P(A1)P(B | A1)",
+      "P(A2)P(B | A2)"
+    ],
+    "expected_sources": [
+      {
+        "source_id": "src_l02_slides",
+        "file_rel": "slides/L02-slides.pdf",
+        "location_type": "slide",
+        "page": 2,
+        "page_label": "2",
+        "slide": 7,
+        "t_start_s": null,
+        "t_end_s": null,
+        "youtube_id": null
+      }
+    ],
+    "multi_turn": null
+  },
+  {
+    "id": "eval-slide-03",
+    "category": "lecture_slide",
+    "source_modality": "slide",
+    "topic_id": "t3",
+    "in_course": true,
+    "question": "How is the independence of two events A and B defined on the Lecture 3 slides?",
+    "reference_answer": "Two events A and B are independent if P(A and B) = P(A)P(B), or equivalently P(B|A) = P(B) (assuming P(A) > 0), meaning occurrence of A provides no information about B.",
+    "acceptable_variations": [
+      "P(A and B) = P(A)P(B)",
+      "P(B|A) = P(B)",
+      "P(A ∩ B) = P(A)P(B)"
+    ],
+    "key_terms": [
+      "independence",
+      "P(B | A) = P(B)",
+      "no information",
+      "symmetric"
+    ],
+    "expected_sources": [
+      {
+        "source_id": "src_l03_slides",
+        "file_rel": "slides/L03-slides.pdf",
+        "location_type": "slide",
+        "page": 1,
+        "page_label": "1",
+        "slide": 3,
+        "t_start_s": null,
+        "t_end_s": null,
+        "youtube_id": null
+      }
+    ],
+    "multi_turn": null
+  },
+  {
+    "id": "eval-slide-04",
+    "category": "lecture_slide",
+    "source_modality": "slide",
+    "topic_id": "t4",
+    "in_course": true,
+    "question": "What is the Basic Counting Principle described on the Lecture 4 slides?",
+    "reference_answer": "If an experiment is carried out in r stages, with n_i choices available at stage i, the total number of possible choices is the product n_1 * n_2 * ... * n_r.",
+    "acceptable_variations": [
+      "n_1 * n_2 * ... * n_r",
+      "n1n2...nr",
+      "product of choices at each stage"
+    ],
+    "key_terms": [
+      "basic counting principle",
+      "r stages",
+      "n1n2",
+      "choices"
+    ],
+    "expected_sources": [
+      {
+        "source_id": "src_l04_slides",
+        "file_rel": "slides/L04-slides.pdf",
+        "location_type": "slide",
+        "page": 1,
+        "page_label": "1",
+        "slide": 3,
+        "t_start_s": null,
+        "t_end_s": null,
+        "youtube_id": null
+      }
+    ],
+    "multi_turn": null
+  },
+  {
+    "id": "eval-slide-05",
+    "category": "lecture_slide",
+    "source_modality": "slide",
+    "topic_id": "t5",
+    "in_course": true,
+    "question": "According to Lecture 5 slides, what is the definition of expectation of a discrete random variable X, and what are its two physical or intuitive interpretations?",
+    "reference_answer": "The expectation is defined as E[X] = sum_x x * p_X(x). Its two interpretations are: (1) the center of gravity of the PMF, and (2) the average in a large number of repetitions.",
+    "acceptable_variations": [
+      "center of gravity and average in large repetitions",
+      "center of gravity of PMF"
+    ],
+    "key_terms": [
+      "expectation",
+      "center of gravity",
+      "average",
+      "repetitions"
+    ],
+    "expected_sources": [
+      {
+        "source_id": "src_l05_slides",
+        "file_rel": "slides/L05-slides.pdf",
+        "location_type": "slide",
+        "page": 2,
+        "page_label": "2",
+        "slide": 6,
+        "t_start_s": null,
+        "t_end_s": null,
+        "youtube_id": null
+      }
+    ],
+    "multi_turn": null
+  },
+  {
+    "id": "eval-slide-06",
+    "category": "lecture_slide",
+    "source_modality": "slide",
+    "topic_id": "t6",
+    "in_course": true,
+    "question": "State the Total Expectation Theorem for a partition of the sample space into disjoint events A1, A2, ..., An from the Lecture 6 slides.",
+    "reference_answer": "For a partition of the sample space into disjoint events A1, A2, ..., An, the Total Expectation Theorem states that E[X] = P(A1)E[X|A1] + P(A2)E[X|A2] + ... + P(An)E[X|An].",
+    "acceptable_variations": [
+      "E[X] = sum P(Ai) E[X|Ai]",
+      "sum of P(Ai) * E[X|Ai]"
+    ],
+    "key_terms": [
+      "Total Expectation theorem",
+      "partition",
+      "disjoint events",
+      "P(A1)E[X | A1]"
+    ],
+    "expected_sources": [
+      {
+        "source_id": "src_l06_slides",
+        "file_rel": "slides/L06-slides.pdf",
+        "location_type": "slide",
+        "page": 2,
+        "page_label": "2",
+        "slide": 7,
+        "t_start_s": null,
+        "t_end_s": null,
+        "youtube_id": null
+      }
+    ],
+    "multi_turn": null
+  },
+  {
+    "id": "eval-book-01",
+    "category": "textbook",
+    "source_modality": "textbook",
+    "topic_id": "t1",
+    "in_course": true,
+    "question": "In Grinstead and Snell Section 1.2, what are the two required properties of a distribution function m on a discrete sample space?",
+    "reference_answer": "A distribution function m on a discrete sample space Omega must satisfy: (1) m(omega) >= 0 for all omega in Omega, and (2) sum_{omega in Omega} m(omega) = 1.",
+    "acceptable_variations": [
+      "m(omega) >= 0 and sum is 1",
+      "non-negative and sums to 1"
+    ],
+    "key_terms": [
+      "distribution function",
+      "nonnegative",
+      "sample space",
+      "m(ω)"
+    ],
+    "expected_sources": [
+      {
+        "source_id": "src_textbook",
+        "file_rel": "textbook/textbook.pdf",
+        "location_type": "page",
+        "page": 3,
+        "page_label": "19",
+        "slide": null,
+        "t_start_s": null,
+        "t_end_s": null,
+        "youtube_id": null
+      }
+    ],
+    "multi_turn": null
+  },
+  {
+    "id": "eval-book-02",
+    "category": "textbook",
+    "source_modality": "textbook",
+    "topic_id": "t4",
+    "in_course": true,
+    "question": "According to Grinstead and Snell Theorem 3.5 in Chapter 3, what is the formula for the binomial coefficients (n choose j)?",
+    "reference_answer": "Theorem 3.5 states that the binomial coefficients are given by the formula (n choose j) = (n)_j / j! = n! / (j! * (n-j)!), representing the number of subsets of size j from a set of size n.",
+    "acceptable_variations": [
+      "n! / (j!(n-j)!)",
+      "n! / (j! * (n-j)!)",
+      "(n)_j / j!"
+    ],
+    "key_terms": [
+      "Theorem 3.5",
+      "subsets",
+      "j-permutations",
+      "j!"
+    ],
+    "expected_sources": [
+      {
+        "source_id": "src_textbook",
+        "file_rel": "textbook/textbook.pdf",
+        "location_type": "page",
+        "page": 45,
+        "page_label": "97",
+        "slide": null,
+        "t_start_s": null,
+        "t_end_s": null,
+        "youtube_id": null
+      }
+    ],
+    "multi_turn": null
+  },
+  {
+    "id": "eval-book-03",
+    "category": "textbook",
+    "source_modality": "textbook",
+    "topic_id": "t4",
+    "in_course": true,
+    "question": "State Grinstead and Snell Theorem 3.6 for the probability of obtaining exactly j successes in n Bernoulli trials with success probability p.",
+    "reference_answer": "Theorem 3.6 states that given n Bernoulli trials with probability p of success on each trial, the probability of exactly j successes is b(n, p, j) = (n choose j) * p^j * q^(n-j), where q = 1 - p.",
+    "acceptable_variations": [
+      "b(n, p, j) = (n choose j) * p^j * q^(n-j)",
+      "(n choose j) p^j (1-p)^(n-j)"
+    ],
+    "key_terms": [
+      "Theorem 3.6",
+      "Bernoulli trials",
+      "b(n, p, j)",
+      "successes"
+    ],
+    "expected_sources": [
+      {
+        "source_id": "src_textbook",
+        "file_rel": "textbook/textbook.pdf",
+        "location_type": "page",
+        "page": 49,
+        "page_label": "101",
+        "slide": null,
+        "t_start_s": null,
+        "t_end_s": null,
+        "youtube_id": null
+      }
+    ],
+    "multi_turn": null
+  },
+  {
+    "id": "eval-book-04",
+    "category": "textbook",
+    "source_modality": "textbook",
+    "topic_id": "t2",
+    "in_course": true,
+    "question": "How do Grinstead and Snell define the conditional probability P(F|E) of an event F given an event E in Section 4.1?",
+    "reference_answer": "In Section 4.1, if an event E has positive probability (P(E) > 0), the conditional probability of F given E is defined by P(F|E) = P(F and E) / P(E).",
+    "acceptable_variations": [
+      "P(F|E) = P(F ∩ E) / P(E)",
+      "P(F|E) = P(F and E) / P(E)",
+      "P(E|F) = P(E and F) / P(F) for P(F) > 0"
+    ],
+    "key_terms": [
+      "conditional probability",
+      "P(E) > 0",
+      "P(F|E)",
+      "P(F ∩E)"
+    ],
+    "expected_sources": [
+      {
+        "source_id": "src_textbook",
+        "file_rel": "textbook/textbook.pdf",
+        "location_type": "page",
+        "page": 71,
+        "page_label": "138",
+        "slide": null,
+        "t_start_s": null,
+        "t_end_s": null,
+        "youtube_id": null
+      },
+      {
+        "source_id": "src_textbook",
+        "file_rel": "textbook/textbook.pdf",
+        "location_type": "page",
+        "page": 72,
+        "page_label": "139",
+        "slide": null,
+        "t_start_s": null,
+        "t_end_s": null,
+        "youtube_id": null
+      }
+    ],
+    "multi_turn": null
+  },
+  {
+    "id": "eval-book-05",
+    "category": "textbook",
+    "source_modality": "textbook",
+    "topic_id": "t3",
+    "in_course": true,
+    "question": "In Grinstead and Snell Definition 4.1 in Chapter 4, when are two events E and F defined to be independent?",
+    "reference_answer": "According to Definition 4.1, two events E and F are defined to be independent if either 1) both events have positive probability and P(E|F) = P(E) and P(F|E) = P(F), or 2) at least one of the events has probability 0 (equivalently, Theorem 4.1 states P(E ∩ F) = P(E)P(F)).",
+    "acceptable_variations": [
+      "P(E|F) = P(E) and P(F|E) = P(F)",
+      "Two events E and F are independent if either both have positive probability and P(E|F) = P(E) and P(F|E) = P(F), or at least one event has probability 0.",
+      "P(E ∩ F) = P(E)P(F)"
+    ],
+    "key_terms": [
+      "independent",
+      "P(E|F) = P(E)",
+      "P(F|E) = P(F)",
+      "positive probability"
+    ],
+    "expected_sources": [
+      {
+        "source_id": "src_textbook",
+        "file_rel": "textbook/textbook.pdf",
+        "location_type": "page",
+        "page": 77,
+        "page_label": "144",
+        "slide": null,
+        "t_start_s": null,
+        "t_end_s": null,
+        "youtube_id": null
+      }
+    ],
+    "multi_turn": null
+  },
+  {
+    "id": "eval-book-06",
+    "category": "textbook",
+    "source_modality": "textbook",
+    "topic_id": "t6",
+    "in_course": true,
+    "question": "In Grinstead and Snell Section 5.1, when is the Poisson distribution used as an approximation to the binomial distribution?",
+    "reference_answer": "The Poisson distribution is used as an approximation to the binomial distribution when the number of trials n is large and the success probability p is small, with lambda = n * p representing the expected number of occurrences.",
+    "acceptable_variations": [
+      "when n is large and p is small",
+      "n large and p small"
+    ],
+    "key_terms": [
+      "Poisson distribution",
+      "binomial",
+      "approximation",
+      "large n",
+      "small p"
+    ],
+    "expected_sources": [
+      {
+        "source_id": "src_textbook",
+        "file_rel": "textbook/textbook.pdf",
+        "location_type": "page",
+        "page": 106,
+        "page_label": "195",
+        "slide": null,
+        "t_start_s": null,
+        "t_end_s": null,
+        "youtube_id": null
+      }
+    ],
+    "multi_turn": null
+  },
+  {
+    "id": "eval-book-07",
+    "category": "textbook",
+    "source_modality": "textbook",
+    "topic_id": "t5",
+    "in_course": true,
+    "question": "State Grinstead and Snell Theorem 6.6 giving the alternative computational formula for the variance of a discrete random variable X.",
+    "reference_answer": "Theorem 6.6 states that if X is a discrete random variable with expected value mu = E(X), then its variance satisfies V(X) = E(X^2) - mu^2 (or E(X^2) - (E(X))^2).",
+    "acceptable_variations": [
+      "V(X) = E(X^2) - mu^2",
+      "V(X) = E(X^2) - (E(X))^2",
+      "E(X^2) - [E(X)]^2"
+    ],
+    "key_terms": [
+      "Theorem 6.6",
+      "variance",
+      "E(X)",
+      "E(X2)"
+    ],
+    "expected_sources": [
+      {
+        "source_id": "src_textbook",
+        "file_rel": "textbook/textbook.pdf",
+        "location_type": "page",
+        "page": 156,
+        "page_label": "265",
+        "slide": null,
+        "t_start_s": null,
+        "t_end_s": null,
+        "youtube_id": null
+      }
+    ],
+    "multi_turn": null
+  },
+  {
+    "id": "eval-turn-01",
+    "category": "multi_turn_followup",
+    "source_modality": "chat_scenario",
+    "topic_id": "t2",
+    "in_course": true,
+    "question": "Can you explain how Bayes' rule applies to the radar detection example from Lecture 2?",
+    "reference_answer": "The posterior probability is P(A|B) = P(A ∩ B) / P(B) = (0.05 * 0.99) / (0.05 * 0.99 + 0.95 * 0.10) = 0.0495 / 0.1445 ≈ 0.34 (approximately 0.3426, or 495 / 1445 = 99 / 289).",
+    "acceptable_variations": [
+      "0.34",
+      "0.3426",
+      "495/1445",
+      "99/289"
+    ],
+    "key_terms": [
+      "radar",
+      "plane",
+      "0.05",
+      "0.99",
+      "0.34",
+      "conditional probabilit"
+    ],
+    "expected_sources": [
+      {
+        "source_id": "src_l02",
+        "file_rel": "videos/L02.mp4",
+        "location_type": "video",
+        "page": null,
+        "page_label": null,
+        "slide": null,
+        "t_start_s": 1730.0,
+        "t_end_s": 1860.0,
+        "youtube_id": "TluTv5V0RmE"
+      },
+      {
+        "source_id": "src_l02_slides",
+        "file_rel": "slides/L02-slides.pdf",
+        "location_type": "slide",
+        "page": 2,
+        "page_label": null,
+        "slide": 5,
+        "t_start_s": null,
+        "t_end_s": null,
+        "youtube_id": null
+      }
+    ],
+    "multi_turn": {
+      "scenario_description": "Two-turn conversational dialogue where the student first asks for the definition of Bayes' rule, then asks for grounding in the concrete radar detection example from Lecture 2.",
+      "preceding_user_question": "What is Bayes' rule?",
+      "preceding_assistant_context": "Bayes' rule updates prior beliefs P(Ai) given observed evidence B: P(Ai|B) = P(Ai)P(B|Ai) / sum_j P(Aj)P(B|Aj).",
+      "stateless_endpoint_note": "POST /v1/notebooks/{nb}/ask is stateless and does not maintain conversation history. For evaluation via /ask, the query is specified with explicit topical grounding ('how Bayes rule applies to the radar detection example'). In the multi-turn chat endpoint, the query is reformulated by build_retrieval_query."
+    }
+  },
+  {
+    "id": "eval-turn-02",
+    "category": "multi_turn_followup",
+    "source_modality": "chat_scenario",
+    "topic_id": "t5",
+    "in_course": true,
+    "question": "In Lecture 5, Lecture 6, and the textbook, what is the linearity property of expectation for a linear transformation Y = aX + b of a random variable X?",
+    "reference_answer": "By the linearity of expectation, E[Y] = E[aX + b] = a*E[X] + b for any constants a and b. You do not need to compute the PMF of Y.",
+    "acceptable_variations": [
+      "aE[X] + b",
+      "a * E[X] + b",
+      "linear property of expectation"
+    ],
+    "key_terms": [
+      "E[αX + β] = αE[X] + β",
+      "expectation",
+      "constants"
+    ],
+    "expected_sources": [
+      {
+        "source_id": "src_l05_slides",
+        "file_rel": "slides/L05-slides.pdf",
+        "location_type": "slide",
+        "page": 2,
+        "page_label": null,
+        "slide": 7,
+        "t_start_s": null,
+        "t_end_s": null,
+        "youtube_id": null
+      },
+      {
+        "source_id": "src_l06_slides",
+        "file_rel": "slides/L06-slides.pdf",
+        "location_type": "slide",
+        "page": 1,
+        "page_label": null,
+        "slide": 2,
+        "t_start_s": null,
+        "t_end_s": null,
+        "youtube_id": null
+      },
+      {
+        "source_id": "src_textbook",
+        "file_rel": "textbook/textbook.pdf",
+        "location_type": "page",
+        "page": 129,
+        "page_label": "238",
+        "slide": null,
+        "t_start_s": null,
+        "t_end_s": null,
+        "youtube_id": null
+      }
+    ],
+    "multi_turn": {
+      "scenario_description": "Two-turn conversational dialogue where the student first asks for the definition of expected value, then inquires about the expectation of a transformed variable Y = aX + b.",
+      "preceding_user_question": "How is the expected value of a discrete random variable defined?",
+      "preceding_assistant_context": "The expected value E[X] = sum_x x * p_X(x) is the probability-weighted average of the possible values.",
+      "stateless_endpoint_note": "POST /v1/notebooks/{nb}/ask is stateless. This scenario tests whether a self-contained follow-up correctly retrieves expectation properties without needing session history."
+    }
+  },
+  {
+    "id": "eval-turn-03",
+    "category": "multi_turn_followup",
+    "source_modality": "chat_scenario",
+    "topic_id": "t3",
+    "in_course": true,
+    "question": "What is the two-coin toss counterexample from Lecture 3 that demonstrates pairwise independence does not imply mutual independence?",
+    "reference_answer": "Consider two independent fair coin tosses. Let Event A be 'first toss is H', Event B be 'second toss is H', and Event C be 'first and second toss have the same outcome (HH or TT)'. Each event has probability 1/2, and any pair has intersection probability 1/4 = (1/2)*(1/2), so they are pairwise independent. However, P(A and B and C) = P(HH) = 1/4 != (1/2)^3 = 1/8, so the three events are not mutually independent.",
+    "acceptable_variations": [
+      "A: first H, B: second H, C: same outcome",
+      "pairwise independent but not mutually independent"
+    ],
+    "key_terms": [
+      "pairwise independence",
+      "first toss",
+      "second toss",
+      "same result",
+      "1 fourth"
+    ],
+    "expected_sources": [
+      {
+        "source_id": "src_l03_slides",
+        "file_rel": "slides/L03-slides.pdf",
+        "location_type": "slide",
+        "page": 2,
+        "page_label": "2",
+        "slide": 7,
+        "t_start_s": null,
+        "t_end_s": null,
+        "youtube_id": null
+      },
+      {
+        "source_id": "src_l03",
+        "file_rel": "videos/L03.mp4",
+        "location_type": "video",
+        "page": null,
+        "page_label": null,
+        "slide": null,
+        "t_start_s": 2117.0,
+        "t_end_s": 2280.0,
+        "youtube_id": "19Ql_Q3l0GA"
+      }
+    ],
+    "multi_turn": {
+      "scenario_description": "Two-turn conversational dialogue where the student asks about pairwise vs mutual independence, then requests the specific coin-toss counterexample given in Lecture 3.",
+      "preceding_user_question": "Does pairwise independence between three events imply that they are mutually independent?",
+      "preceding_assistant_context": "No, pairwise independence does not imply mutual independence. Three events can be pairwise independent while being completely dependent as a collection.",
+      "stateless_endpoint_note": "POST /v1/notebooks/{nb}/ask is stateless. In chat, this follow-up would rely on previous turn context ('pairwise independence counterexample'); here it is formulated with the specific lecture reference."
+    }
+  },
+  {
+    "id": "eval-off-01",
+    "category": "outside_course",
+    "source_modality": "none",
+    "topic_id": null,
+    "in_course": false,
+    "question": "What is the capital of France, and what is its current estimated population?",
+    "reference_answer": "This question is not covered in the course material. (The capital of France is Paris, but the 6.041 probability course does not cover world geography or demographics.)",
+    "acceptable_variations": [
+      "not covered in the course material",
+      "not covered in your course",
+      "The course does not cover this topic"
+    ],
+    "key_terms": [
+      "not covered in the course",
+      "course",
+      "France"
+    ],
+    "expected_sources": [],
+    "multi_turn": null
+  },
+  {
+    "id": "eval-off-02",
+    "category": "outside_course",
+    "source_modality": "none",
+    "topic_id": null,
+    "in_course": false,
+    "question": "How does photosynthesis convert sunlight into chemical energy in plant chloroplasts?",
+    "reference_answer": "This question is not covered in the course material. (Photosynthesis and plant cell biology are outside the scope of 6.041 Probabilistic Systems Analysis.)",
+    "acceptable_variations": [
+      "not covered in the course material",
+      "not covered in your course",
+      "The course does not cover this topic"
+    ],
+    "key_terms": [
+      "not covered in the course",
+      "photosynthesis",
+      "chloroplasts"
+    ],
+    "expected_sources": [],
+    "multi_turn": null
+  },
+  {
+    "id": "eval-off-03",
+    "category": "outside_course",
+    "source_modality": "none",
+    "topic_id": null,
+    "in_course": false,
+    "question": "Explain the rules of cricket, specifically how the LBW (leg before wicket) law works.",
+    "reference_answer": "This question is not covered in the course material. (Cricket and the LBW rule are outside the scope of this probability course.)",
+    "acceptable_variations": [
+      "not covered in the course material",
+      "not covered in your course",
+      "The course does not cover this topic"
+    ],
+    "key_terms": [
+      "not covered in the course",
+      "cricket",
+      "LBW"
+    ],
+    "expected_sources": [],
+    "multi_turn": null
+  }
+]
