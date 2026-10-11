@@ -37,6 +37,54 @@ from app.questions.passages import SelectedPassage, format_passages_block
 logger = logging.getLogger(__name__)
 
 
+# Quarantined after the whole-bank check of 11 Oct 2026. IDs are stable only while the cached model
+# responses exist (prompt version 2). If the cache is lost, regenerating changes which question
+# gets which ID: delete this dict and re-check the bank.
+QUARANTINE: dict[str, str] = {
+    "t4-numerical-v2-05": "AMBIGUOUS: 144 if rooks differ, 72 if identical; stem is silent",
+    "t6-mcq-v2-07": "BAD MISCONCEPTION: rationales for options c and d describe other values",
+    "t6-numerical-v2-08": (
+        "LEAKED REASONING: explanation shows generator self-talk (Wait, solution code)"
+    ),
+    "t5-numerical-v2-07": "LEAKED REASONING: explanation shows wait ... let us recompute",
+    "t2-numerical-v2-06": "LEAKED REASONING: explanation ends with a stray question mark and Wait",
+    "t1-mcq-v2-04": "REUSED: Rec 1 Q1 states this exact formula; the MCQ just asks for it",
+    "t1-mcq-v2-07": "REUSED: textbook p.21 election example restated, plus a D option",
+    "t2-mcq-v2-07": "REUSED: 14-token copy of the Rec 2 solutions generalisation",
+    "t2-numerical-v2-04": "REUSED: Rec 2 Q1 coin example, tails for heads, same 1/3",
+    "t3-mcq-v2-05": (
+        "REUSED: Rec 3 Q4(a), same question and answer; duplicate of t3-numerical-v2-01"
+    ),
+    "t3-mcq-v2-06": "REUSED: Rec 3 Q4(b), same statement",
+    "t3-numerical-v2-01": "REUSED: Rec 3 Q4(a) again; code only restates the answer",
+    "t3-numerical-v2-03": "REUSED: Rec 3 Q2(a) with p=1/3 plugged in (borderline)",
+    "t3-numerical-v2-04": "REUSED: Rec 3 Q2(c), same answer 2/3; code only restates the answer",
+    "t3-numerical-v2-06": "REUSED: Lecture 3 slide 2 P(1 head) with p=3/4 plugged in (borderline)",
+    "t4-mcq-v2-05": "REUSED: Rec 4 Q4 asks students to derive this formula",
+    "t4-mcq-v2-06": "REUSED: Rec 4 Q1 birthday problem; option b shows raw LaTeX",
+    "t4-mcq-v2-08": (
+        "REUSED: Rec 4 Q3 hypergeometric, numbers plugged in; same urn as t6-numerical-v2-03"
+    ),
+    "t6-numerical-v2-01": (
+        "REUSED: Rec 6 Q1 solution table cell is the same 3/8; die labels shifted"
+    ),
+    "t2-mcq-v2-05": "BAD MISCONCEPTION: option d (1/5) rationale would give 1/4, not 1/5",
+    "t5-mcq-v2-03": "BAD MISCONCEPTION: option c rationale is empty filler text",
+    "t5-mcq-v2-05": (
+        "WEAK CITATION: option b rationale explains nothing; cite is a derivation, not E[X]"
+    ),
+    "t5-mcq-v2-06": "BAD MISCONCEPTION: option a (36) rationale describes a different expression",
+    "t6-mcq-v2-01": (
+        "BAD MISCONCEPTION: option c (7) rationale subtracts beta squared, which does not give 7"
+    ),
+    "t6-mcq-v2-06": "BAD MISCONCEPTION: option b rationale is vague",
+    "t2-mcq-v2-06": (
+        "DUPLICATE: same sample-space fact as t1-mcq-v2-01; keep t1 to protect minimums"
+    ),
+    "t6-numerical-v2-02": "DUPLICATE: same P(T>3)=8/27 problem as t6-mcq-v2-04; keep the MCQ",
+}
+
+
 class BudgetExhausted(Exception):
     """Raised when the next Gemini attempt would exceed --max-calls."""
 
@@ -312,6 +360,7 @@ def process_mcq_batch(
     stored_pairs: list[tuple[str, StoredQuestion]] = []
     verified_count = 0
     rejected_count = 0
+    quarantined_count = 0
     rejected_details: list[str] = []
 
     for prep in prepared_items:
@@ -345,7 +394,15 @@ def process_mcq_batch(
                 detail = f"mismatch: {blind_model} chose {blind_choice}, key {key}"
 
         if status == "verified":
-            verified_count += 1
+            if qid in QUARANTINE:
+                status = "rejected"
+                passed = False
+                detail = f"quarantined: {QUARANTINE[qid]} | original: {detail}"
+                quarantined_count += 1
+                rejected_count += 1
+                rejected_details.append(f"{qid}: {detail}")
+            else:
+                verified_count += 1
         else:
             rejected_count += 1
             rejected_details.append(f"{qid}: {detail}")
@@ -376,6 +433,7 @@ def process_mcq_batch(
         "generated": len(stored_pairs),
         "verified": verified_count,
         "rejected": rejected_count,
+        "quarantined_applied": quarantined_count,
         "rejection_details": rejected_details,
         "generator_model": gen_model,
         "checker_model": blind_model,
@@ -525,6 +583,7 @@ def process_numerical_batch(
     stored_pairs: list[tuple[str, StoredQuestion]] = []
     verified_count = 0
     rejected_count = 0
+    quarantined_count = 0
     rejected_details: list[str] = []
 
     for pass_info in first_pass_results:
@@ -597,7 +656,15 @@ def process_numerical_batch(
         # Fallback value resolution for numerical answer.value
         if status == "verified":
             final_val = computed_val or stated_for_storage
-            verified_count += 1
+            if qid in QUARANTINE:
+                status = "rejected"
+                passed = False
+                detail = f"quarantined: {QUARANTINE[qid]} | original: {detail}"
+                quarantined_count += 1
+                rejected_count += 1
+                rejected_details.append(f"{qid}: {detail}")
+            else:
+                verified_count += 1
         else:
             if parse_exact(stated_for_storage) is not None:
                 final_val = stated_for_storage
@@ -640,6 +707,7 @@ def process_numerical_batch(
         "generated": len(stored_pairs),
         "verified": verified_count,
         "rejected": rejected_count,
+        "quarantined_applied": quarantined_count,
         "rejection_details": rejected_details,
         "generator_model": gen_model,
         "checker_model": None,
