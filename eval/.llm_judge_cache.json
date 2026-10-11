@@ -1,0 +1,74 @@
+{
+  "f97420b3a33f7ff54d8fecc071fe9adf90401bdc035bc9155b1c6112213ddedb": {
+    "faithfulness_score": 5,
+    "correctness_score": 5,
+    "reasoning": "The answer accurately names the two properties specified in the Lecture 1 slides (mutually exclusive and collectively exhaustive) and is directly supported by the context.",
+    "model": "gemini-3.8-flash"
+  },
+  "5b9f87508db5a072f249941732349f086f814a984f20d767fad0bf4e30d5a62f": {
+    "faithfulness_score": 5,
+    "correctness_score": 5,
+    "reasoning": "The assistant's answer is fully supported by the context passages (specifically [1] and [9]) and accurately matches the reference answer in both reasoning and final result.",
+    "model": "gemini-3.8-flash"
+  },
+  "bff62d887fb4f41f4c2bc75a21c41875791e0fac6472f38703f03e3aaa2adc91": {
+    "faithfulness_score": 5,
+    "correctness_score": 5,
+    "reasoning": "The assistant correctly states the formula and calculates the joint probability using the numbers from the context, perfectly matching the reference answer.",
+    "model": "gemini-3.8-flash"
+  },
+  "ada7e817ec732c39ffa913528982e06cbd40c7585530d97cf1231fd6bfab1b37": {
+    "faithfulness_score": 5,
+    "correctness_score": 5,
+    "reasoning": "The answer provides the correct probability (2/3) and fully explains the reasoning in accordance with both the retrieved context and the reference answer.",
+    "model": "gemini-3.5-flash"
+  },
+  "7bdceb02e1daae9a2d838d90c079c959f1c4f5b504f06c8a427d080c71614073": {
+    "faithfulness_score": 5,
+    "correctness_score": 5,
+    "reasoning": "The provided context introduces the problem and sets up the calculation (identifying the sample space size as 6^6), but it does not explicitly state the final numerical probability. Therefore, the assistant correctly identified that the provided material does not contain the completed answer.",
+    "model": "gemini-3.1-flash-lite"
+  },
+  "f48d11a3ef6428c635312491c1d337cbc7d1484d9678d12505c95c2c58efe245": {
+    "faithfulness_score": 5,
+    "correctness_score": 5,
+    "reasoning": "The answer directly and accurately addresses the question based on the context from Lecture 5, matching the reference answer well.",
+    "model": "gemini-3.5-flash"
+  },
+  "135d0a8a4d13acebc43466274bbbc5e30fe8be4bfdf7ca0a8ecd0803a972bf1e": {
+    "faithfulness_score": 5,
+    "correctness_score": 5,
+    "reasoning": "The answer is fully supported by the context and accurately answers the question by stating that you fix the value of X and sum the joint PMF over all possible values of Y.",
+    "model": "gemini-3.5-flash"
+  },
+  "aa1d24e82c78c0e2e3814d527cdfc35b987c673aa4bb4fe7d2b9731ad40e10bd": {
+    "faithfulness_score": 5,
+    "correctness_score": 5,
+    "reasoning": "The answer accurately states the Total Probability Theorem for three partition events as presented on the Lecture 2 slides, perfectly matching both the context and the reference answer.",
+    "model": "gemini-3.5-flash"
+  },
+  "bea6cb6d76605e4b525c44130f1c8f0e018bd34d532488c58eb7d06049ed9e92": {
+    "faithfulness_score": 5,
+    "correctness_score": 5,
+    "reasoning": "The answer accurately reflects the definitions provided in the lecture slides, including both the conditional probability form and the intersection form.",
+    "model": "gemini-3.1-flash-lite"
+  },
+  "c5ecd5ff6daa573e4502a32dfa6bb70711870eca16aa52bbd05494f831ccdbf3": {
+    "faithfulness_score": 5,
+    "correctness_score": 5,
+    "reasoning": "The response accurately and fully states the Basic Counting Principle as shown on the Lecture 4 slides and matches the reference answer perfectly.",
+    "model": "gemini-3.5-flash"
+  },
+  "1b689d3de4923c45e47144a0f85b56c29ef96cdeea15558a423a6dc6355f7d41": {
+    "faithfulness_score": 5,
+    "correctness_score": 5,
+    "reasoning": "The answer accurately provides the definition and the two interpretations of expectation as stated in the Lecture 5 slides.",
+    "model": "gemini-3.1-flash-lite"
+  },
+  "e3205e4021e5540d2f22d58ee651f4aa2d2a72565cd7956b4ad0b8c8c6dc3629": {
+    "faithfulness_score": 5,
+    "correctness_score": 5,
+    "reasoning": "The answer accurately states the Total Expectation Theorem as provided in the lecture slides.",
+    "model": "gemini-3.1-flash-lite"
+  }
+}
