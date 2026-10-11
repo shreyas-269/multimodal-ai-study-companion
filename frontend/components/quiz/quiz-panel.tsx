@@ -14,6 +14,7 @@ import { QuizStartForm } from "./quiz-start-form";
 import { QuizQuestionCard } from "./quiz-question-card";
 import { QuizFeedback } from "./quiz-feedback";
 import { QuizReview } from "./quiz-review";
+import type { QuizReviewItem } from "@/components/quiz-review";
 import {
   formatQuizError,
   type QuizPhase,
@@ -40,6 +41,7 @@ export function QuizPanel({
   const [count, setCount] = useState<5 | 10>(5);
   const [currentDraft, setCurrentDraft] = useState("");
   const [error, setError] = useState<QuizErrorState | null>(null);
+  const [reviewItems, setReviewItems] = useState<QuizReviewItem[]>([]);
 
   // Preselect nonce tracking (H1, F4, F5)
   const [handledNonce, setHandledNonce] = useState(() => quizRequest?.nonce ?? 0);
@@ -167,6 +169,7 @@ export function QuizPanel({
         return;
       }
 
+      setReviewItems([]);
       setSession({
         quiz,
         index: 0,
@@ -227,6 +230,26 @@ export function QuizPanel({
           },
         };
       });
+      setReviewItems((prev) => {
+        if (prev.some((item) => item.question.id === currentQ.id)) {
+          return prev;
+        }
+        let studentAnswerText = currentDraft;
+        if (currentQ.type === "mcq") {
+          const matchedOpt = currentQ.options.find((o) => o.id === currentDraft);
+          studentAnswerText = matchedOpt ? matchedOpt.text : currentDraft;
+        }
+        return [
+          ...prev,
+          {
+            questionNumber: session.index + 1,
+            totalQuestions: session.quiz.questions.length,
+            question: currentQ,
+            studentAnswer: studentAnswerText,
+            feedback: res.feedback,
+          },
+        ];
+      });
       setPhase("feedback");
     } catch (err) {
       if (sessionRef.current !== mySession) return;
@@ -284,6 +307,7 @@ export function QuizPanel({
     sessionRef.current += 1;
     inFlightRef.current = false;
     setAppliedTopicIds(null);
+    setReviewItems([]);
     if (session) {
       setSelectedTopicIds(session.quiz.topic_ids);
     }
@@ -296,6 +320,7 @@ export function QuizPanel({
   // Replay handlers (C4)
   const handleNewQuizSameTopics = () => {
     setAppliedTopicIds(null);
+    setReviewItems([]);
     if (session) {
       setSelectedTopicIds(session.quiz.topic_ids);
       setCount(session.quiz.questions.length >= 10 ? 10 : 5);
@@ -308,6 +333,7 @@ export function QuizPanel({
 
   const handleChooseOtherTopics = () => {
     setAppliedTopicIds(null);
+    setReviewItems([]);
     setSelectedTopicIds([]);
     setCount(5);
     setSession(null);
@@ -388,9 +414,8 @@ export function QuizPanel({
       <div className="p-6">
         <QuizReview
           summary={session.summary}
-          questions={session.quiz.questions}
-          results={session.results}
           topicNameMap={topicNameMap}
+          reviewItems={reviewItems}
           onNewQuizSameTopics={handleNewQuizSameTopics}
           onChooseOtherTopics={handleChooseOtherTopics}
         />
