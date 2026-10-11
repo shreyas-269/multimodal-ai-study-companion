@@ -775,3 +775,65 @@ Template for each feature:
   - A stray empty file named `1500` appeared in the backend folder: a shell command meant to compare with 1500 had written its output to a file of that name. It was deleted before the commit.
   - The live checks met two real-world problems. The AI model answered "busy" once, so that check was simply run again later. And a check script crashed printing a maths symbol on the Windows console, losing a response; replaying the identical conversation recovered it from the cache with no extra AI call.
   - Two mutants first looked killed only because a live check was writing to the shared database at the same moment. Run alone, the real result showed. Verifies now finish all tests before any live check.
+
+---
+
+## SC2 · Firestore storage for the Study Coach
+
+**What it does:** Gives the Study Coach a real database. Until now its maths and rules lived in memory only. Now, when a student has Study Coach on, answering a quiz question updates that topic's mastery, and sending a message in a topic chat records a "this student asked about this topic" signal. Nothing the student sees changes and no endpoint was added: quiz answers and chat replies look exactly as before. With Study Coach off, or not yet answered, nothing is recorded.
+
+**Data flow:**
+- `quizzes_answer`: the attempt is saved first, in Q2's transaction, exactly as before → after it commits, `get_study_coach_enabled(uid)` reads `users/{uid}.study_coach` (true only when it is stored as true; null, false or missing all count as off) → if on, `record_quiz_answer` runs through `coach_storage(notebook_id, uid)` with the attempt ID `{quiz_id}_{question_id}`, the question's topic and type, and the score → this also runs when the answer was already recorded (`already_answered`), so a crash between the two steps is repaired by the student's next click.
+- `FirestoreCoachStorage.update_mastery` is one transaction: it reads the marker event `qa_{attempt_id}` and the topic's mastery document first; if the marker exists it writes nothing and does not call the update function; otherwise it calls the function, checks that the result is a proper mastery record, and only then writes the mastery document (`p_known`, `n_obs`, `last_updated`) and the marker event together.
+- `chats_send`: after the chat turn is saved, a whole-notebook chat does nothing at all; a topic chat reads the Study Coach setting and, if on, records a chat signal with the event ID `cs_{user message ID}`, created only if absent.
+- Both calls sit in `try/except Exception` with `logger.exception`, so a coach failure never changes the quiz or chat response.
+- Reads: the event list asks Firestore only for a `created_at` range (up to 1,000 events) and filters the kind in Python, so no composite index is needed; topics are read with a field projection that leaves out the large `locations` list.
+
+**Main files:** `backend/app/db/coach.py` (`FirestoreCoachStorage`, `coach_storage`, `get_study_coach_enabled`), `backend/app/db/paths.py`, `backend/app/api/quizzes.py`, `backend/app/api/chats.py`, `backend/tests/test_coach_firestore.py`, `backend/tests/test_coach_wiring.py`.
+
+**A judge might ask… / my answer:**
+- *What if the same answer is sent twice, or two copies arrive at once?* The marker event and the mastery update are written in the same transaction, and the marker is read inside it. A second copy finds the marker and changes nothing. A test fires three identical requests at once through a barrier and checks that exactly one is applied.
+- *Why is the coach called after the attempt is saved and not inside the same transaction?* The attempt is the student's real work and was already reviewed and tested. The mastery update is derived from it and can be repeated safely, so it runs afterwards. If the server stops in between, answering the question again takes the "already answered" path, which calls the coach again, and the marker lets it land once. A test deletes the coach's documents and checks that the repeat answer rebuilds them.
+- *What if the learner model fails?* The student never notices. The attempt or chat turn is already saved, the error is logged, and the response is unchanged. A judge should never see a server error because of the learner model.
+- *Why does "not asked yet" count as off?* Study Coach is opt-in. Nothing is tracked until the student says yes.
+- *Why does a whole-notebook chat record nothing?* A signal means "this student is asking about this topic". A question across the whole notebook doesn't point at one.
+- *Why not filter events by kind in Firestore?* Filtering on one field and a time range at once needs a composite index. The local emulator doesn't enforce indexes, so it would only fail on the hosted demo. Reading a bounded time range and filtering in Python avoids that.
+- *Does the storage ever overwrite the student's member document?* No. It writes only inside the mastery and event subcollections. The member document also holds the quiz history and is only ever created by `ensure_member`.
+- *What went wrong while building it?*
+  - The first plan review stopped at its own safety check: `backend/tests/test_llm.py` showed as modified and was not on the list of the other task's files. The re-run was told to judge it by evidence (whether its diff only exercised the other task's uncommitted `generate.py` changes) and to stop if the evidence was unclear.
+  - The plan review found a High issue: the snippets for quizzes.py and chats.py defined no logger and imported UTC, not timezone, so timezone.utc would raise NameError inside try and logger.exception would raise NameError in except, returning 500 for every coach-on answer or chat turn; fixed by adding import logging and logger = logging.getLogger(__name__) to both files, adding the coach imports (from app.coach import record_quiz_answer / record_chat_signal, from app.db.coach import coach_storage, get_study_coach_enabled), and using datetime.now(UTC).
+  - get_checked as written (snap.get("checked", {})) raised KeyError when the members doc or field was missing, where InMemory returns {}; fixed by using raw = (snap.to_dict() or {}).get("checked") and returning {k: v is True for k, v in raw.items()} if raw is a dict, else {}.
+  - client.transaction() allows 5 attempts by default, which 3-thread T4 could exhaust on the emulator; fixed by using client.transaction(max_attempts=10) and having T4 assert outcomes and n_obs only, never the fn call count.
+  - Storage path strings were unspecified; fixed by stating notebooks/{nb}/members/{uid}/mastery[/{topic_id}] and .../coach_events[/{event_id}], importing from app.db.paths only, and reusing user_path.
+  - One helper was used for both write and read and its behaviour was vague; fixed by defining _utc(dt) as d = dt.astimezone(UTC) returning datetime(d.year, ..., d.microsecond, tzinfo=UTC), with T5 asserting type(x) is datetime.
+  - The plan bound notebook_id/uid in the constructor but every method also took nb, uid; fixed by having methods use their arguments for paths (like InMemory) and raising ValueError on a mismatch with the bound IDs before any I/O.
+  - Test T8 could not fail if .select was removed; fixed by spying on CollectionReference.select and asserting the field list equals TopicInfo fields minus id, with no locations.
+  - Test setup was unspecified; fixed by using notebook_tracker/user_tracker for users/{uid} cleanup, writing notebook docs directly under nb_test_sc2_{uuid4().hex[:12]}, seeding topics with name, order, prerequisite_ids, is_other, locations, reusing seed_notebook_source_and_chunks and the mock_gemini_client JSON setup from test_chats.py, and having T9 set members.checked on both storages.
+  - "Off costs one users read" and failure injection were untested; fixed by having W4/W8 spy that get_study_coach_enabled is called once and coach_storage never, and having W5/W9 patch app.api.quizzes.record_quiz_answer and app.api.chats.record_chat_signal to raise, assert an ERROR log (caplog), and compare the response with a normal one.
+
+---
+
+## SC3 · Study Coach endpoints
+
+**What it does:** Three endpoints give the frontend what it needs for the progress view. One returns, for every topic, whether the student ticked it and, with Study Coach on, how well they know it. One returns the few topics that need work most, with foundations first. One saves a topic's checkbox and, with Study Coach on, tells the coach. The API decides nothing about mastery itself: it reports what the coach computed.
+
+**Data flow:**
+- `GET /v1/notebooks/{nb}/progress`: `get_readable_notebook` (yours, or the demo) → `get_study_coach_enabled(uid)` → the coach's `get_progress` with Firestore storage and the current time → each topic's result is mapped onto `TopicProgressOut`. With Study Coach off, only `checked` is filled in. The route writes nothing.
+- `GET /v1/notebooks/{nb}/needs-work?limit=3`: the same access check, then the coach's `get_topics_needing_work`. Limit is 1 to 6, otherwise 422. With Study Coach off, the coach's fallback lists the unticked topics in syllabus order.
+- `PUT /v1/notebooks/{nb}/topics/{t}/checked {checked}`: access check → the topic ID is matched in full and must exist in the notebook (otherwise 404) → `ensure_member` → one field-masked read of the checked map → if the topic is already in the requested state, return 200 and write nothing → otherwise update `members/{uid}` by field path (set `checked.{topic}` to true, or delete that field on untick) → if Study Coach is on, `record_checkbox`, inside `try/except` so the response stays 200.
+
+**Main files:** `backend/app/api/coach.py`, `backend/app/models/coach.py`, `backend/app/main.py` (router registration), `backend/app/db/coach.py` (a small checkbox helper), `backend/tests/test_coach_endpoints.py`.
+
+**A judge might ask… / my answer:**
+- *Where does "mastered" come from?* From the Study Coach core's own label for the topic, passed through unchanged. The 0.7 rule lives in one place, the sealed core, and the API never repeats it, so the two can't disagree.
+- *Why does the checkbox update a single field path instead of saving the member document?* The member document also holds the student's quiz history. A normal save would overwrite it. Updating only `checked.{topic}` can't touch anything else, and unticking deletes the key, so the map only ever holds ticked topics.
+- *Why does unticking not lower mastery?* Unticking edits a checklist; it isn't evidence about what the student knows. A mistaken tick simply fades through the normal forgetting curve.
+- *Why do the GET routes never write?* Opening a page must not create data. A student who has never done anything simply sees empty progress.
+- *Why is the demo notebook allowed?* Progress and checkboxes are private learner state under the student's own `members/{uid}`, so every judge gets their own without seeing anyone else's.
+- *Why return 404 for a topic that doesn't exist, and for a notebook with no topics?* Only the demo notebook has topics in v1, and a checkbox on a topic that isn't there would be stored forever with nothing to show it.
+- *What if the coach fails while saving a tick?* The checkbox is already saved and the response is still 200. The failure is logged.
+- *What went wrong while building it?*
+  - To save Claude usage, SC3 skipped the separate plan review. The build ran from the written spec and the verify's code review checked it against that spec instead.
+  - The verify caught one High issue: the progress route hard-coded `mastered` to null, although the coach does give each topic a label. A live check showed a topic with `p_known` 0.8 coming back with `mastered` null. The fix reads the label (and the tests for both modes now assert it), and the 0.7 rule stays out of the API.
+  - Three Low issues were left for after the feature freeze: a duplicated topic-ID helper, a test for a malformed topic ID that doesn't prove the pattern check by itself, and an import inside a function. A live request with the ID `__x__` was added to the re-verify to cover the pattern check.
+  - The full suite (679 tests) passed in the first verify, and the OpenAPI schema differed from the previous commit only by the three new operations and their six schemas.

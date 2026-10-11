@@ -58,9 +58,9 @@
 | `POST /v1/notebooks/{nb}/quizzes/{q}/answers` | `{question_id, answer, time_ms}` → Feedback | S6 |
 | `POST /v1/notebooks/{nb}/quizzes/{q}/finish` | Review: `build_report` when Study Coach is on, a plain score summary when off | S6 / S7 |
 | `POST /v1/notebooks/{nb}/diagnostic` | `{action: "start" \| "skip"}` → quiz or status | S7 |
-| `GET /v1/notebooks/{nb}/progress` | `get_progress` | S7 |
-| `GET /v1/notebooks/{nb}/needs-work` | `get_topics_needing_work` | S7 |
-| `PUT /v1/notebooks/{nb}/topics/{t}/checked` | `{checked}`; also calls `record_checkbox` | S7 |
+| `GET /v1/notebooks/{nb}/progress` | Per-topic checked state and, with Study Coach on, mastery: `progress_get` (shape below) | S7 (SC3) |
+| `GET /v1/notebooks/{nb}/needs-work?limit=3` | The weakest topics, weak prerequisites first; with Study Coach off, the unchecked topics: `needs_work_get` (shape below) | S7 (SC3) |
+| `PUT /v1/notebooks/{nb}/topics/{t}/checked` | `{checked}` → `{topic_id, checked}`; with Study Coach on it also calls `record_checkbox`: `topics_put_checked` | S7 (SC3) |
 
 ## Key shapes
 
@@ -125,4 +125,33 @@ response: { user_message: Message, assistant_message: Message, model, latency_ms
 ```text
 { verdict: correct | incorrect | partial, correct_answer, explanation,
   citations: [Citation], misconception?, rubric_coverage?: [{point, met}] }
+```
+
+**Study Coach progress** (`GET /v1/notebooks/{nb}/progress`, operation ID `progress_get`)
+
+```text
+{ study_coach: bool, items: [ { topic_id, checked: bool, p_known: number|null, mastered: bool|null,
+                                 n_obs: int|null, last_updated: datetime|null } ], next_cursor: null }
+# items in syllabus order; readable by the owner or anyone for the demo notebook; writes nothing
+# study_coach is false when Study Coach is off or not asked yet: checked is real, every other item field is null
+# mastered is the Study Coach core's own label ("mastered" -> true, any other label -> false); null when off;
+# the API never applies a threshold of its own
+```
+
+**Study Coach needs-work** (`GET /v1/notebooks/{nb}/needs-work?limit=3`, operation ID `needs_work_get`)
+
+```text
+{ study_coach: bool, items: [ { topic_id, p_known: number|null, chat_signals: int|null } ], next_cursor: null }
+# limit 1-6, default 3, otherwise 422; weak prerequisites come before the topics that build on them
+# with Study Coach off: the unchecked topics in syllabus order, p_known and chat_signals null; writes nothing
+```
+
+**Topic checkbox** (`PUT /v1/notebooks/{nb}/topics/{t}/checked`, operation ID `topics_put_checked`)
+
+```text
+request:  { checked: bool }        # strict: a string, a number, null or an extra field is 422
+response: { topic_id, checked }    # 200
+# unknown or malformed topic ID, or a notebook without topics: 404; allowed on the demo notebook
+# the same state again: 200, nothing written; members/{uid}.checked holds only true values
+# with Study Coach on, a tick lifts mastery to at least the checkbox floor and an untick never lowers it
 ```
