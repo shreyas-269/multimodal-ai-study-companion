@@ -1,4 +1,4 @@
-﻿# How it works
+# How it works
 
 Short notes on each feature's data flow, drafted with AI assistance (Claude Code) after the feature passes its acceptance checks. They double as judge-question prep.
 
@@ -868,3 +868,28 @@ Template for each feature:
   - Mutation testing, in which small bugs are planted in a copy of the code, showed four tests missing: the shuffle-to-key mapping, the chunk field mask, the computed answer value and the missing-citation rejection. All were added.
   - The tests were writing reports into the real course folder, and early exits skipped the report and the verified count. Both were fixed.
   - The first 16 questions already included three that restated course problems. A rule against reuse was added and the prompt version was raised, but the full-bank review still found 14 reused questions, an ambiguous one and several explanations that contained the generator's own reasoning, so 27 were quarantined.
+
+---
+
+## F5 · Study Coach UI and progress dashboard
+
+**What it does:** Adds the Study Coach progress UI to the notebook's left panel. Displays a monochrome summary bar ("N of M topics checked" when off, "N of M topics mastered" when on), a "Study next" recommendation card with up to three prioritized topics, and interactive checkboxes for syllabus topics. Checkboxes update server state non-optimistically. When Study Coach is enabled, each topic displays its mastery status ("Mastered" or "Learning · NN%"). Answering quiz questions or sending topic chat messages automatically refreshes progress and recommendations.
+
+**Data flow:**
+- On notebook open: `useQuery(["progress", uid, nb])` calls `GET /v1/notebooks/{nb}/progress` (`progress_get`), and `useQuery(["needs-work", uid, nb])` calls `GET /v1/notebooks/{nb}/needs-work?limit=3` (`needs_work_get`). Queries are gated on course topics being available.
+- Checkbox toggle: click dispatches `PUT /v1/notebooks/{nb}/topics/{t}/checked` (`topics_put_checked`) with `{checked}`. The checkbox is disabled while pending. Upon PUT resolution, `Promise.allSettled` awaits query invalidation for both `["progress"]` and `["needs-work"]`, maintaining a list-level lock until both settle. Retained data stays visible if refetch fails.
+- Study Next card: derives items from `needsWorkQuery.data`. "All caught up! All topics mastered." renders only when `data.items.length === 0`. Each item displays topic name, reason (e.g., "Not started yet" when `n_obs === 0`), and "Quiz" / "Chat" action buttons.
+- Cross-component invalidation: `handleCheckAnswer` in `quiz-panel.tsx` and `sendChatMessage` in `chat-panel.tsx` invalidate both `["progress"]` and `["needs-work"]` queries upon successful server completion.
+
+**Main files:**
+- `frontend/components/study-next-card.tsx`: recommendations, reason derivation, and action handlers.
+- `frontend/components/progress-summary.tsx`: monochrome progress bar and summary text.
+- `frontend/components/topic-status-badge.tsx`: badge rendering based on `study_coach` and `mastered`.
+- `frontend/components/topic-list.tsx`: stacked row layout, non-optimistic checkbox mutation, and list-level lock.
+- `frontend/components/quiz/quiz-panel.tsx` and `frontend/components/chat-panel.tsx`: query invalidation wiring.
+- `frontend/lib/api.ts`: `progress_get`, `needs_work_get`, and `topics_put_checked` API bindings.
+
+**A judge might ask… / my answer:**
+- *Why are topic checkboxes non-optimistic?* Mastery and checklist states are server-authoritative. Optimistic updates would flicker or desynchronize if the BKT update, event deduplication, or network request failed. Disabling the checkbox while the mutation and reconciliation settle prevents double-submits and race conditions.
+- *Why gate Study Next on data instead of isSuccess?* In TanStack Query v5, a background refetch failure sets `isError: true` while preserving existing `data`. Gating on `isSuccess` would unmount the recommendations card during a transient network glitch. Gating on `data` keeps the UI stable.
+- *What went wrong while building it?* Placing the checkbox, topic title, and three action buttons (Chat, Quiz, Sources) on a single horizontal flex line compressed the title in the narrow 288 px sidebar, forcing words to wrap vertically letter by letter. Restructuring each topic item into a three-row stacked layout (Title line, Status badge line, Action buttons line) resolved the issue while maintaining full touch targets.
