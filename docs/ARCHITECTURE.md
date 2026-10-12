@@ -84,7 +84,7 @@ Every source is processed once and every model output is cached. The demo course
 
 ## Long-running work (no job queue)
 
-There is no job queue in v1 (cut on 6 Oct). Uploads are processed inside the request, which takes up to about 2 minutes for a textbook. Long work runs as laptop scripts that are safe to re-run: transcription (`backend/scripts/transcribe_lectures.py`, about 3.5 h for the six lectures), the demo-notebook build (`backend/scripts/ingest_course.py`, about 2.5 min from scratch), the question-bank build (S6) and the evaluation run (S9). Deterministic chunk IDs and the LLM cache make a re-run resume instead of repeating work or spending quota. The `jobs` collection, `GET /v1/jobs/{job}` and `POST /internal/jobs/run` are not built.
+There is no job queue in v1 (cut on 6 Oct). Uploads are processed inside the request, which takes up to about 2 minutes for a textbook. Long work runs as laptop scripts that are safe to re-run: transcription (`backend/scripts/transcribe_lectures.py`, about 3.5 h for the six lectures), the demo-notebook build (`backend/scripts/ingest_course.py`, about 2.5 min from scratch), the question-bank build (S6), the evaluation run (S9), and production Firestore seeding (ackend/scripts/seed_production_firestore.py). Deterministic chunk IDs and the LLM cache make a re-run resume instead of repeating work or spending quota. The `jobs` collection, `GET /v1/jobs/{job}` and `POST /internal/jobs/run` are not built.
 
 ## Design rules
 

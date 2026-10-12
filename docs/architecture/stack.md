@@ -45,7 +45,7 @@
 │   │   ├── chat/         answer generation, citation mapping
 │   │   ├── questions/    generation and verifiers
 │   │   └── coach/        SEALED: __init__.py exposes the eight calls; bkt.py is pure maths
-│   ├── scripts/          ingest_course.py, fetch_course.py, simulate_students.py
+│   ├── scripts/          ingest_course.py, fetch_course.py, simulate_students.py, seed_production_firestore.py, prewarm_cache.py
 │   ├── tests/
 │   ├── pyproject.toml, uv.lock, Dockerfile
 ├── frontend/

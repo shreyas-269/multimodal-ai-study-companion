@@ -955,6 +955,29 @@ Template for each feature:
 
 ---
 
+## S11-B1 · Production Firestore seeding and cloud data migration
+
+**What it does:** Migrates the complete demo course structure and pre-warmed cache from the local Docker Firestore emulator (127.0.0.1:8080) to the live Firebase project study-companion-d049d (Spark plan) using service account credentials. It transfers exactly 1,760 documents—including the demo notebook 
+b_demo_6041, all 26 source records, 713 embedded chunks, 7 syllabus topics, 96 question records (verified and quarantined), and 917 pre-warmed LLM cache entries—without recomputing embeddings or making a single live Gemini API call.
+
+**Data flow:**
+- Developer runs ackend/scripts/seed_production_firestore.py with explicit or auto-discovered service account JSON credentials.
+- Script connects to the local Firestore emulator on 127.0.0.1:8080 (enforcing unencrypted gRPC transport via FIRESTORE_EMULATOR_HOST) and reads 
+otebooks/nb_demo_6041, subcollections sources, chunks, 	opics, questions, and the top-level llm_cache collection.
+- Private user data subcollections (members, chats, ttempts, quizzes) are explicitly excluded to protect student data isolation.
+- Script unsets FIRESTORE_EMULATOR_HOST and initializes the production Google Cloud Firestore client against study-companion-d049d using service account OAuth credentials.
+- Documents are committed in sequential batches of up to 400 documents using prod_client.batch().commit().
+- After commit, the script performs a reconciliation read against production Firestore and asserts that document counts across all collections match the emulator baseline exactly.
+
+**Main files:** ackend/scripts/seed_production_firestore.py.
+
+**A judge might ask… / my answer:**
+- *Why migrate from the emulator instead of running ingest_course.py directly against production?* ingest_course.py has a hard safety assertion that refuses to run against non-demo- projects to prevent accidental cloud modifications. More importantly, re-ingesting against production would waste time recalculating embeddings and risked API rate limits. Migrating the verified emulator data transfers the exact embeddings and chunk boundaries with zero API calls.
+- *Does the migration overwrite student progress?* No. The script migrates only notebook course data and top-level llm_cache. Private learner subcollections (members/{uid}) are never touched or overwritten.
+- *How do you know all documents made it to production?* The script runs an automated reconciliation step immediately after batch writes, counting documents across all target subcollections and asserting equality against emulator counts before exiting with code 0.
+
+---
+
 ## F7 / S11-B2 · Hosted Vercel deployment and live auth switching
 
 **What it does:** Deploys the Next.js frontend to Vercel Hobby connected to the live Firebase project `study-companion-d049d` (Spark plan) for Authentication and to the external hosted backend URL. Switching `NEXT_PUBLIC_USE_EMULATORS` to `false` disables the local Auth emulator connection (`127.0.0.1:9099`) and switches the frontend client directly to production Google Identity Toolkit authentication. It ensures production guest and email logins work seamlessly on the live domain, while requiring a complete HTTPS backend URL to prevent mixed content issues.
