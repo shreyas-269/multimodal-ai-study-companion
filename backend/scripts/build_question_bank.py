@@ -32,6 +32,7 @@ from app.db.questions import (  # noqa: E402
 )
 from app.db.topics import get_topic_snapshot  # noqa: E402
 from app.llm.exceptions import ModelUnavailable, QuotaExhausted, UnreadableOutput  # noqa: E402
+from app.questions import bank  # noqa: E402
 from app.questions.bank import (  # noqa: E402
     BudgetExhausted,
     process_mcq_batch,
@@ -93,6 +94,14 @@ def format_markdown_review(nb_id: str, batch_reports: list[dict[str, Any]]) -> s
                 continue
 
             lines.append(f"### {qid} [{q.status.upper()}] (Difficulty {q.difficulty})\n")
+            if q.verification.detail and q.verification.detail.startswith("quarantined: "):
+                reason = (
+                    bank.QUARANTINE.get(qid)
+                    or q.verification.detail.split("quarantined: ", 1)[1].split(
+                        " | original:", 1
+                    )[0]
+                )
+                lines.append(f"QUARANTINED: {reason}\n")
             lines.append(f"**Stem**: {q.stem}\n")
 
             if q.type == "mcq":
@@ -130,6 +139,9 @@ def finalize(
     total_verified = sum(item.verified for item in counts_items)
     set_questions_verified(notebook_id, total_verified)
 
+    quarantined_applied = sum(item.get("quarantined_applied", 0) for item in batch_reports)
+    quarantine_total = len(bank.QUARANTINE)
+
     course_dir_val = os.environ.get("COURSE_DATA_DIR")
     if course_dir_val:
         out_dir = Path(course_dir_val) / "derived" / "question_bank"
@@ -137,6 +149,8 @@ def finalize(
             "notebook_id": notebook_id,
             "status": status,
             "total_verified": total_verified,
+            "quarantined_applied": quarantined_applied,
+            "quarantine_total": quarantine_total,
             "attempts_used": budget.attempts,
             "batches": batch_reports,
         }
@@ -147,7 +161,8 @@ def finalize(
 
     print(
         f"\nQuestion bank completed ({status}) for {notebook_id}: "
-        f"total_verified={total_verified}, attempts_used={budget.attempts}/{max_calls}."
+        f"total_verified={total_verified}, attempts_used={budget.attempts}/{max_calls}, "
+        f"quarantined_applied={quarantined_applied}, quarantine_total={quarantine_total}."
     )
 
 

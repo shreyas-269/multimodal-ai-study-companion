@@ -36,7 +36,7 @@ The Replan on 6 Oct moved the dates and cut scope; each decision is a 6 Oct line
 | Part | Technology |
 | --- | --- |
 | Backend API | Python 3.12 + FastAPI in one container; the hosted platform is decided in S11 (Cloud Run needs billing, which is unavailable) |
-| Frontend | Next.js (TypeScript) on Vercel Hobby |
+| Frontend | Next.js (TypeScript) on Vercel Hobby. For Docker/T6 the workspace is also packaged as a standalone server (`output: 'standalone'` in `next.config.ts`) running under the non-root `node` user on port 3000, with `NEXT_PUBLIC_*` variables injected as build args |
 | Login | Firebase Authentication: email/password and guest (anonymous) |
 | Database + vector search | Firestore (accessed only by the backend); the real project stays on the Spark plan |
 | File storage | The Storage emulator locally; hosted storage is decided in S11, behind `backend/app/storage.py` |

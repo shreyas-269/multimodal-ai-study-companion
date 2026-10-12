@@ -952,3 +952,25 @@ Template for each feature:
 - *Why local storage instead of Cloudflare R2 or S3?* Creating a Google Cloud billing account failed with OR_BACR2_59. Cloudflare R2 requires credit card verification on signup. The course materials are 20 PDFs totaling 10.71 MB, so bundling them directly in the container or mounting them via Docker volume eliminates external cloud storage dependencies with zero billing risk.
 - *How do Range requests work without GCS?* Python's standard file operations seek directly to the requested byte offset and stream the exact byte window. `sources.py` emits HTTP 206 with `Content-Range: bytes start-end/total`, which `react-pdf` consumes for fast page loading.
 - *How do judges run the demo with zero API calls?* The Firestore emulator image imports the pre-seeded demo course and pre-warmed `llm_cache` collection. Asking evaluation questions or benchmark queries resolves entirely from cache without consuming Gemini API quota.
+
+---
+
+## F7 / S11-B2 · Hosted Vercel deployment and live auth switching
+
+**What it does:** Deploys the Next.js frontend to Vercel Hobby connected to the live Firebase project `study-companion-d049d` (Spark plan) for Authentication and to the external hosted backend URL. Switching `NEXT_PUBLIC_USE_EMULATORS` to `false` disables the local Auth emulator connection (`127.0.0.1:9099`) and switches the frontend client directly to production Google Identity Toolkit authentication. It ensures production guest and email logins work seamlessly on the live domain, while requiring a complete HTTPS backend URL to prevent mixed content issues.
+
+**Data flow:**
+- User visits `https://multimodal-ai-study-companion.vercel.app/` -> client route guard redirects unauthenticated traffic to `/login`.
+- User clicks "Continue as guest" or submits email/password -> `frontend/lib/firebase.ts` (`getFirebaseAuth()`) checks `NEXT_PUBLIC_USE_EMULATORS` (set to `"false"`), skips `connectAuthEmulator()`, and invokes Firebase Auth directly against Google's live identity servers (`identitytoolkit.googleapis.com`).
+- On successful authentication, Firebase issues an authenticated ID token (JWT) -> user is routed to `/notebooks`.
+- Requests from `frontend/lib/api.ts` (`apiFetch`, `getSourceFileRequest`) retrieve the live token via `currentUser.getIdToken()` after `authStateReady()` and send `Authorization: Bearer <token>` to `NEXT_PUBLIC_API_BASE_URL` (stripped of trailing slashes).
+- With backend hosting pending in S11-A, calls to the placeholder API return HTTP 404, which `apiFetch` handles cleanly as a structured `ApiError` without crashing the client interface.
+
+**Main files:** `frontend/lib/firebase.ts`, `frontend/lib/api.ts`, `frontend/next.config.ts`, `frontend/package.json`.
+
+**A judge might ask… / my answer:**
+- *Why does the frontend connect to live Firebase while the backend still runs locally in development?* Environment variables decouple client configuration completely. With `NEXT_PUBLIC_USE_EMULATORS=false`, the client points to live Firebase Auth without needing any local emulators running, while local development keeps `NEXT_PUBLIC_USE_EMULATORS=true` to remain completely offline and cost-free.
+- *How do you prevent unauthorized domains from accessing Auth?* Firebase Authentication explicitly enforces authorized domains under Settings -> Authorized domains. The production domain `vercel.app` (and `multimodal-ai-study-companion.vercel.app`) is explicitly registered in the Firebase console; any other unlisted origin receives an immediate `auth/unauthorized-domain` error.
+- *Why does NEXT_PUBLIC_API_BASE_URL require a full HTTPS scheme and no localhost fallback?* A missing environment variable failing silently to `127.0.0.1:8000` would cause obscure connection failures in production. Failing loudly with "Missing required environment variable" makes configuration errors immediately obvious, and requiring HTTPS prevents browser mixed-content blocks when fetching from an SSL-secured Vercel domain.
+- *Does the standalone Docker output setting interfere with Vercel?* No. `output: "standalone"` in `next.config.ts` packages the standalone server for Docker (Task F6 / S11-B), but Vercel's native Next.js build pipeline automatically overrides and ignores standalone packaging to deploy serverless and static routes natively.
+
