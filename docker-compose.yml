@@ -22,5 +22,43 @@ services:
       retries: 10
       start_period: 10s
 
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    depends_on:
+      emulators:
+        condition: service_healthy
+    environment:
+      # Required by Settings; a demo- project ID is local-only, and the bucket is never used
+      # because STORAGE_BACKEND=local reads files from disk.
+      FIREBASE_PROJECT_ID: demo-study-companion
+      FIREBASE_STORAGE_BUCKET: unused-local-storage
+      # Service name, not 127.0.0.1: these calls stay inside the compose network.
+      FIRESTORE_EMULATOR_HOST: emulators:8080
+      FIREBASE_AUTH_EMULATOR_HOST: emulators:9099
+      STORAGE_BACKEND: local
+      STORAGE_LOCAL_DIR: /app/course-data
+      CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: gemini-3.8-flash
+      GEMINI_FALLBACK_MODELS: gemini-3.5-flash,gemini-3.1-flash-lite
+    volumes:
+      # Course PDFs stay outside git; the backend only ever reads them.
+      - ${COURSE_DATA_DIR:-./course-data}:/app/course-data:ro
+
+  frontend:
+    build:
+      context: ./frontend
+      # NEXT_PUBLIC_* is baked in at build time, so the real values go here.
+      # The browser calls these URLs from the host, so they use localhost, not service names.
+      args:
+        NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+        NEXT_PUBLIC_USE_EMULATORS: "true"
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
 volumes:
   emulator_data:
