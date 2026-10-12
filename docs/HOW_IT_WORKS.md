@@ -974,3 +974,24 @@ Template for each feature:
 - *Why does NEXT_PUBLIC_API_BASE_URL require a full HTTPS scheme and no localhost fallback?* A missing environment variable failing silently to `127.0.0.1:8000` would cause obscure connection failures in production. Failing loudly with "Missing required environment variable" makes configuration errors immediately obvious, and requiring HTTPS prevents browser mixed-content blocks when fetching from an SSL-secured Vercel domain.
 - *Does the standalone Docker output setting interfere with Vercel?* No. `output: "standalone"` in `next.config.ts` packages the standalone server for Docker (Task F6 / S11-B), but Vercel's native Next.js build pipeline automatically overrides and ignores standalone packaging to deploy serverless and static routes natively.
 
+---
+
+## S11-A · Storage adapter abstraction (StorageBackend protocol)
+
+**What it does:** Isolates file storage mechanics behind a unified 5-method `StorageBackend` Protocol (`upload_bytes`, `get_object_size`, `stream_byte_range`, `stream_object`, `delete_prefix`) in `backend/app/storage.py`. It supports Google Cloud Storage (`gcs`) for cloud deployments and local emulator testing, local disk filesystem storage (`local`) for the judges' Docker Compose evaluation and zero-cloud demo runs, and an internal stub (`s3`) providing a verified extension point for future AWS S3 or Cloudflare R2 integration without introducing external third-party SDK dependencies like `boto3`.
+
+**Data flow:**
+- Callers in `backend/app/api/sources.py` call module-level delegators (`upload_bytes`, `get_object_size`, `stream_byte_range`, `stream_object`, `delete_prefix`) -> `get_storage_backend()` factory resolves the configured provider from `get_settings().storage_backend` (`gcs`, `local`, or `s3`).
+- `LocalStorageBackend` resolves root boundaries (`STORAGE_LOCAL_DIR`, default `./course-data`) and path targets using `Path.resolve()`. It handles path traversal attacks by rejecting attempts escaping the root (`not target.is_relative_to(root)` or `target == root`) with `FileNotFoundError`, while safely intercepting null bytes, invalid paths, and Windows `OSError`.
+- On read operations (`for_read=True`), `LocalStorageBackend` maps demo source IDs (`notebooks/nb_demo_6041/sources/<id>/original.pdf`) to corresponding local course filenames (`slides/`, `recitations/`, `textbook/`), keeping Firestore viewer paths intact without file duplication.
+- `stream_byte_range` and `stream_object` evaluate generators lazily, yielding binary chunks up to `chunk_size` (default 1 MB) and raising `FileNotFoundError` upon the first iteration (`next()`), allowing streaming HTTP responses in FastAPI to handle missing objects cleanly before streaming commences.
+- `delete_prefix` deletes all matching objects under the root or bucket. Passing an empty prefix raises `ValueError("Cannot delete with empty prefix")` across both local and GCS backends to prevent accidental whole-bucket or whole-root deletion.
+
+**Main files:** `backend/app/storage.py`, `backend/tests/test_storage_local.py`, `plans/storage-adapter-plan.md`.
+
+**A judge might ask... / my answer:**
+- *Why a Protocol rather than an ABC or branching if statements?* Eliminates scattered `_use_local()` branches and tight coupling while letting callers remain completely unchanged. Using a `@runtime_checkable` `typing.Protocol` enables structural subtyping with `isinstance()` checks without requiring concrete inheritance from an abstract base class, and module-level delegators preserve full backwards compatibility for all existing call sites.
+- *How do you protect against directory traversal on local storage?* The local backend resolves both root and target paths with `.resolve()`, rejects attempts escaping the root with `FileNotFoundError` via `.is_relative_to(root)`, and refuses access if the target path equals the root directory itself. It also wraps resolution in a `try...except (ValueError, OSError)` block to catch null bytes, illegal Windows filenames, and malformed paths before they touch the filesystem.
+- *Why is S3 an internal stub instead of using boto3?* Preserves the frozen dependency stack while preparing the codebase architecture for alternative hosting destinations. Introducing `boto3` or `botocore` would add dozens of megabytes of third-party dependencies during a strict freeze. The stub implements the complete Protocol, raises descriptive `NotImplementedError` exceptions, and proves multi-provider extensibility in automated tests.
+- *Why does delete_prefix reject an empty string?* Both local and GCS backends enforce `ValueError("Cannot delete with empty prefix")` to prevent accidental whole-bucket or whole-root deletion. Passing an empty prefix in Cloud Storage or an unrestricted recursive unlink on the local filesystem would wipe all stored data.
+
