@@ -908,3 +908,47 @@ Template for each feature:
 - *Why call run_answer_pipeline directly instead of generating hashes manually?* The cache key combines the model name, prompt version, prompt hash, and caller parts separated by unit separators (`\x1f`). Re-implementing the hash assembly would risk subtle drift as prompt templates evolve; calling the production pipeline guarantees identical keys by construction.
 - *Does this script waste API quota?* No. It checks the existing cache first. Re-running the script against pre-warmed entries reports 25/25 cache hits and 0 live LLM calls.
 - *How do you ensure retrieval order doesn't change and cause cache misses?* The script runs candidate retrieval twice per query before executing and verifies that the retrieved chunk IDs match identically, guarding against vector search instability.
+
+## F6 / T6 · Frontend Production Packaging & Docker Alignment
+
+**What it does:** Packages the Next.js 16 frontend workspace into a lightweight, standalone production Docker container that runs natively or via `docker compose up frontend` on port 3000 alongside emulators and the backend, without requiring a host node_modules directory.
+
+**Data flow:** `docker compose build frontend` passes `NEXT_PUBLIC_API_BASE_URL` and `NEXT_PUBLIC_USE_EMULATORS` as build args → multi-stage Dockerfile installs dependencies (`deps`), builds the standalone artifact (`builder`) with `output: 'standalone'` in `next.config.ts`, and copies `.next/standalone`, `.next/static`, and `public` into a lean `node:22-alpine` image (`runner`) → executed as non-root user `node` on port 3000 via `node server.js`.
+
+**Main files:** `frontend/next.config.ts`, `frontend/Dockerfile`, `docker-compose.yml`, `frontend/.dockerignore`.
+
+**A judge might ask… / my answer:**
+- *Why standalone mode?* It bundles only the required production files and node_modules dependencies into `.next/standalone`, drastically reducing container image size and startup latency.
+- *Why are environment variables passed as build args instead of runtime environment vars?* Next.js inlines `NEXT_PUBLIC_*` values into client bundles during build time (`npm run build`). Setting them at runtime has no effect on client components.
+
+---
+
+## S11 / T6 · Local storage adapter and judge Docker package
+
+**What it does:** Allows the backend to run without Google Cloud Storage or Cloud Run billing by reading course PDFs directly from a local directory or mounted container volume with HTTP Range request support (`206 Partial Content`). It also provides a one-command `docker compose up` judge package that orchestrates the Firebase emulators, FastAPI backend, and Next.js frontend together with pre-warmed responses and zero external cloud storage dependencies.
+
+**Data flow:**
+- Browser requests PDF bytes through `GET /v1/notebooks/{nb}/sources/{src}/file` with optional `Range: bytes=start-end` header.
+- `app/api/sources.py` validates access and delegates to `app/storage.py`.
+- When `STORAGE_BACKEND=local`:
+  - `_local_path` checks if the path begins with `notebooks/nb_demo_6041/sources/`. If so, it maps demo source IDs (`src_l01_slides` ... `src_l06_slides` -> `slides/L0{n}-slides.pdf`, `src_r01` ... `src_r06` -> `recitations/R0{n}.pdf`, `src_r01_sol` ... `src_r06_sol` -> `recitations/R0{n}-sol.pdf`, `src_textbook` -> `textbook/textbook.pdf`). Other paths resolve directly under `STORAGE_LOCAL_DIR` with a traversal guard (`..` rejection).
+  - `get_object_size` reads `file.stat().st_size`.
+  - `stream_byte_range` opens the file, seeks to `start`, and streams exactly the requested byte slice in chunks.
+  - `stream_object` streams the full binary stream.
+- In Docker (`docker compose up`):
+  - `emulators`: Firebase Auth (9099), Firestore (8080), Storage (9199), UI (4000) with health checks.
+  - `backend`: Python 3.12-slim with pre-baked `bge-small-en-v1.5` embeddings model, mounting `./course-data` read-only at `/app/course-data`.
+  - `frontend`: Next.js 16 standalone Node 22-alpine container exposing port 3000.
+
+**Main files:**
+- `backend/app/config.py`: `storage_backend: Literal["gcs", "local"]`, `storage_local_dir`, optional `jobs_runner_secret`.
+- `backend/app/storage.py`: `_local_path`, `_demo_source_files`, and local filesystem branches across byte primitives.
+- `backend/Dockerfile`: Multi-stage Python 3.12 image with `uv` and baked embedding models.
+- `frontend/Dockerfile`: Multi-stage Next.js standalone runner.
+- `docker-compose.yml`: Multi-service orchestration wiring emulators, backend, and frontend.
+- `backend/tests/test_storage_local.py`: 17 unit tests verifying path translations, traversal guards, file sizes, and range slicing.
+
+**A judge might ask… / my answer:**
+- *Why local storage instead of Cloudflare R2 or S3?* Creating a Google Cloud billing account failed with OR_BACR2_59. Cloudflare R2 requires credit card verification on signup. The course materials are 20 PDFs totaling 10.71 MB, so bundling them directly in the container or mounting them via Docker volume eliminates external cloud storage dependencies with zero billing risk.
+- *How do Range requests work without GCS?* Python's standard file operations seek directly to the requested byte offset and stream the exact byte window. `sources.py` emits HTTP 206 with `Content-Range: bytes start-end/total`, which `react-pdf` consumes for fast page loading.
+- *How do judges run the demo with zero API calls?* The Firestore emulator image imports the pre-seeded demo course and pre-warmed `llm_cache` collection. Asking evaluation questions or benchmark queries resolves entirely from cache without consuming Gemini API quota.
