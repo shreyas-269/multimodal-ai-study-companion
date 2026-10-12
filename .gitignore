@@ -153,4 +153,4 @@ plans/
 *service-account*.json
 frontend/.env.local
 backend/.cache/
-
+/course-data/
