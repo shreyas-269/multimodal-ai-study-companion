@@ -1,11 +1,49 @@
 import os
 from collections.abc import Iterator
 from functools import lru_cache
+from pathlib import Path
 
 from google.auth.credentials import AnonymousCredentials
 from google.cloud import storage
 
 from app.config import get_settings
+
+
+def _use_local() -> bool:
+    return get_settings().storage_backend == "local"
+
+
+_DEMO_SOURCES_PREFIX = "notebooks/nb_demo_6041/sources/"
+
+
+def _demo_source_files() -> dict[str, str]:
+    """Demo source ID -> file inside the course folder (Firestore IDs differ from disk names)."""
+    files = {"src_textbook": "textbook/textbook.pdf"}
+    for n in range(1, 7):
+        files[f"src_l0{n}_slides"] = f"slides/L0{n}-slides.pdf"
+        files[f"src_r0{n}"] = f"recitations/R0{n}.pdf"
+        files[f"src_r0{n}_sol"] = f"recitations/R0{n}-sol.pdf"
+    return files
+
+
+_DEMO_SOURCE_FILES = _demo_source_files()
+
+
+def _local_path(path: str) -> Path:
+    """Map a storage path to a file under STORAGE_LOCAL_DIR, refusing anything outside it.
+
+    Firestore stores demo viewer paths as notebooks/nb_demo_6041/sources/<id>/original.pdf, but
+    the course folder uses its own names, so those paths are translated first.
+    """
+    if path.startswith(_DEMO_SOURCES_PREFIX):
+        parts = path[len(_DEMO_SOURCES_PREFIX) :].split("/")
+        if len(parts) == 2 and parts[1] == "original.pdf" and parts[0] in _DEMO_SOURCE_FILES:
+            path = _DEMO_SOURCE_FILES[parts[0]]
+    root = Path(get_settings().storage_local_dir).resolve()
+    target = (root / path).resolve()
+    if not target.is_relative_to(root):
+        raise FileNotFoundError(f"Storage path escapes local storage root: {path}")
+    return target
 
 
 @lru_cache
@@ -59,7 +97,13 @@ def get_storage_bucket() -> storage.Bucket:
 
 
 def upload_bytes(path: str, data: bytes, content_type: str = "application/pdf") -> None:
-    """Upload raw bytes to a Cloud Storage object path."""
+    """Upload raw bytes to a Cloud Storage object path (or a local file in local mode)."""
+    if _use_local():
+        target = _local_path(path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+        return
+
     bucket = get_storage_bucket()
     blob = bucket.blob(path)
     blob.upload_from_string(data, content_type=content_type)
@@ -67,6 +111,12 @@ def upload_bytes(path: str, data: bytes, content_type: str = "application/pdf") 
 
 def get_object_size(path: str) -> int:
     """Return size of object in bytes, raising FileNotFoundError if missing."""
+    if _use_local():
+        target = _local_path(path)
+        if not target.is_file():
+            raise FileNotFoundError(f"Storage object not found: {path}")
+        return target.stat().st_size
+
     bucket = get_storage_bucket()
     blob = bucket.get_blob(path)
     if blob is None:
@@ -81,6 +131,21 @@ def stream_byte_range(
     chunk_size: int = 1024 * 1024,
 ) -> Iterator[bytes]:
     """Stream byte range [start, end] inclusive in 1 MB pieces."""
+    if _use_local():
+        target = _local_path(path)
+        if not target.is_file():
+            raise FileNotFoundError(f"Storage object not found: {path}")
+        with target.open("rb") as f:
+            f.seek(start)
+            remaining = end - start + 1
+            while remaining > 0:
+                chunk = f.read(min(chunk_size, remaining))
+                if not chunk:
+                    break
+                yield chunk
+                remaining -= len(chunk)
+        return
+
     bucket = get_storage_bucket()
     blob = bucket.get_blob(path)
     if blob is None:
@@ -98,6 +163,15 @@ def stream_byte_range(
 
 def stream_object(path: str, chunk_size: int = 1024 * 1024) -> Iterator[bytes]:
     """Stream entire object in 1 MB pieces without buffering into memory."""
+    if _use_local():
+        target = _local_path(path)
+        if not target.is_file():
+            raise FileNotFoundError(f"Storage object not found: {path}")
+        with target.open("rb") as f:
+            while chunk := f.read(chunk_size):
+                yield chunk
+        return
+
     bucket = get_storage_bucket()
     blob = bucket.get_blob(path)
     if blob is None:
@@ -111,6 +185,16 @@ def stream_object(path: str, chunk_size: int = 1024 * 1024) -> Iterator[bytes]:
 
 def delete_prefix(prefix: str) -> None:
     """Delete all objects matching the given prefix."""
+    if _use_local():
+        if not prefix:
+            raise ValueError("Refusing to delete everything under the local storage root")
+        root = Path(get_settings().storage_local_dir).resolve()
+        # Same string-prefix meaning as Cloud Storage, not a directory delete
+        for file in root.rglob("*"):
+            if file.is_file() and file.relative_to(root).as_posix().startswith(prefix):
+                file.unlink()
+        return
+
     bucket = get_storage_bucket()
     blobs = list(bucket.list_blobs(prefix=prefix))
     if blobs:

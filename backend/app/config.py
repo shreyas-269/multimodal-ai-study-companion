@@ -1,5 +1,5 @@
 from functools import lru_cache
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -16,9 +16,10 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # Required API and runner secrets (no default values)
+    # Required API secret (no default value)
     gemini_api_key: str
-    jobs_runner_secret: str
+    # Deprecated 2026-10-07 (jobs endpoints were cut); kept optional so old .env files still load
+    jobs_runner_secret: str | None = None
 
     # Required app configurations
     gemini_model: str
@@ -33,6 +34,11 @@ class Settings(BaseSettings):
     firebase_auth_emulator_host: str | None = None
     storage_emulator_host: str | None = None
     gemini_fallback_models: str | None = None
+
+    # "gcs" = Cloud Storage client (emulator or real bucket); "local" = read files from a folder,
+    # used by the judges' Docker image and the free hosted demo (no billing-enabled bucket needed)
+    storage_backend: Literal["gcs", "local"] = "gcs"
+    storage_local_dir: str = "/app/course-data"
 
     @field_validator(
         "google_application_credentials",
