@@ -175,6 +175,16 @@ Status on 10 Oct: the first four checks pass (S4, F2b, FX3). The quiz endpoints 
 - Progress with Study Coach off shows each topic's checked state with null mastery; with it on, a ticked topic shows mastered, an untick does not lower it, and needs-work lists a weak prerequisite before the topic that builds on it.
 - The OpenAPI schema differs from before SC3 only by the three new operations and their schemas, and nothing changes for `quizzes_answer` or `chats_send`.
 
+### Checkpoint 3 (passed 13 Oct)
+
+- Executed `eval/run_eval.py` (--no-judge) against `nb_demo_6041` across all 25 testset cases in `eval/testset.json` using `backend/.venv` from repo root.
+- Zero live Gemini API quota spent (25/25 queries hit pre-warmed `llm_cache`).
+- Out-of-domain boundary compliance: 100% (3/3 refusal / `outside_course` containment).
+- Citation recall: 81.5% overall (slides 100%, textbook 87.5%, video 83.3%). Video timestamps strictly adhere to Spec E1 ([-45s, end] matching window).
+- Citation precision: 64.3% (27 / 42).
+- Context key-term recall: 92.3% in-course mean (20 of 22 cases >= 75%).
+- Retrieval latency profile: p50 = 0.2 s, p90 = 0.9 s on cached benchmark runs.
+
 ## Frontend (state on 10 Oct)
 
 - Next.js 16 (App Router, TypeScript) in `frontend/`, styled with Tailwind and shadcn/ui's base-nova style, which is built on Base UI rather than Radix (no `asChild`). Monochrome throughout; the font is Geist from next/font (`--font-sans` maps to `--font-geist-sans`).

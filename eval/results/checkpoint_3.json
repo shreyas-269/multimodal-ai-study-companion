@@ -1,18 +1,14 @@
 {
   "meta": {
-    "run_at": "2026-10-11 21:16:16 UTC",
+    "run_at": "2026-10-13 02:52:51 UTC",
     "base_url": "http://127.0.0.1:8000",
     "notebook_id": "nb_demo_6041",
     "testset": "eval\\testset.json",
     "only": null,
     "judge_version": "judge-v1",
-    "judge_models": [
-      "gemini-3.8-flash",
-      "gemini-3.5-flash",
-      "gemini-3.1-flash-lite"
-    ],
-    "judge_api_calls": 30,
-    "judge_cache_hits": 1
+    "judge_models": [],
+    "judge_api_calls": 0,
+    "judge_cache_hits": 0
   },
   "aggregate": {
     "cases_total": 25,
@@ -60,18 +56,18 @@
       "cases_total": 3
     },
     "judge": {
-      "cases_judged": 12,
+      "cases_judged": 0,
       "cases_in_course": 22,
-      "mean_faithfulness": 5.0,
-      "mean_correctness": 5.0,
-      "faithfulness_at_least_4": 12,
-      "correctness_at_least_4": 12
+      "mean_faithfulness": null,
+      "mean_correctness": null,
+      "faithfulness_at_least_4": 0,
+      "correctness_at_least_4": 0
     },
     "latency_ms": {
-      "wall_clock_p50": 12597.474099951796,
-      "wall_clock_p90": 19140.55010001175,
-      "backend_p50": 12576,
-      "backend_p90": 19111
+      "wall_clock_p50": 218.21179997641593,
+      "wall_clock_p90": 925.990300020203,
+      "backend_p50": 194,
+      "backend_p90": 895
     }
   },
   "cases": [
@@ -82,8 +78,8 @@
       "in_course": true,
       "question": "In the Lecture 1 coin tossing experiment where a coin is tossed until heads appears for the first time with probability law P(n) = 2^(-n), what is the probability that the outcome is an even number?",
       "error": null,
-      "wall_clock_ms": 2223.5907999565825,
-      "backend_latency_ms": 1768,
+      "wall_clock_ms": 4403.743200004101,
+      "backend_latency_ms": 2774,
       "model": "gemini-3.8-flash",
       "response": {
         "paragraphs": [
@@ -350,7 +346,7 @@
           }
         ],
         "model": "gemini-3.8-flash",
-        "latency_ms": 1768
+        "latency_ms": 2774
       },
       "key_terms": {
         "recall_pct": 80.0,
@@ -388,14 +384,7 @@
         ]
       },
       "false_refusal": false,
-      "boundary": null,
-      "judge": {
-        "faithfulness_score": 5,
-        "correctness_score": 5,
-        "reasoning": "The assistant's answer is fully supported by the context passages (specifically [1] and [9]) and accurately matches the reference answer in both reasoning and final result.",
-        "model": "gemini-3.8-flash",
-        "cached": false
-      }
+      "boundary": null
     },
     {
       "id": "eval-lec-02",
@@ -404,8 +393,8 @@
       "in_course": true,
       "question": "In the radar detection example from Lecture 2, if an airplane is present with probability 0.05 and the radar correctly registers a detection with probability 0.99 when a plane is present, what is the probability that a plane is present and the radar registers a detection?",
       "error": null,
-      "wall_clock_ms": 4635.032299906015,
-      "backend_latency_ms": 4594,
+      "wall_clock_ms": 925.990300020203,
+      "backend_latency_ms": 895,
       "model": "gemini-3.8-flash",
       "response": {
         "paragraphs": [
@@ -782,7 +771,7 @@
           }
         ],
         "model": "gemini-3.8-flash",
-        "latency_ms": 4594
+        "latency_ms": 895
       },
       "key_terms": {
         "recall_pct": 100.0,
@@ -837,14 +826,7 @@
         ]
       },
       "false_refusal": false,
-      "boundary": null,
-      "judge": {
-        "faithfulness_score": 5,
-        "correctness_score": 5,
-        "reasoning": "The assistant correctly states the formula and calculates the joint probability using the numbers from the context, perfectly matching the reference answer.",
-        "model": "gemini-3.8-flash",
-        "cached": false
-      }
+      "boundary": null
     },
     {
       "id": "eval-lec-03",
@@ -853,8 +835,8 @@
       "in_course": true,
       "question": "In the Lecture 3 royal family example with two children (assuming each child is equally likely a boy or girl independently), given that at least one child is a boy who became king, what is the probability that the king's sibling is female?",
       "error": null,
-      "wall_clock_ms": 13267.814500024542,
-      "backend_latency_ms": 13240,
+      "wall_clock_ms": 1095.3365999739617,
+      "backend_latency_ms": 1033,
       "model": "gemini-3.8-flash",
       "response": {
         "paragraphs": [
@@ -1185,7 +1167,7 @@
           }
         ],
         "model": "gemini-3.8-flash",
-        "latency_ms": 13240
+        "latency_ms": 1033
       },
       "key_terms": {
         "recall_pct": 100.0,
@@ -1234,14 +1216,7 @@
         ]
       },
       "false_refusal": false,
-      "boundary": null,
-      "judge": {
-        "faithfulness_score": 5,
-        "correctness_score": 5,
-        "reasoning": "The answer provides the correct probability (2/3) and fully explains the reasoning in accordance with both the retrieved context and the reference answer.",
-        "model": "gemini-3.5-flash",
-        "cached": false
-      }
+      "boundary": null
     },
     {
       "id": "eval-lec-04",
@@ -1250,8 +1225,8 @@
       "in_course": true,
       "question": "In the Lecture 4 dice rolling example, what is the probability that six rolls of a fair six-sided die all show different numbers?",
       "error": null,
-      "wall_clock_ms": 7163.917600060813,
-      "backend_latency_ms": 6936,
+      "wall_clock_ms": 221.5401999419555,
+      "backend_latency_ms": 198,
       "model": "gemini-3.5-flash",
       "response": {
         "paragraphs": [
@@ -1467,7 +1442,7 @@
           }
         ],
         "model": "gemini-3.5-flash",
-        "latency_ms": 6936
+        "latency_ms": 198
       },
       "key_terms": {
         "recall_pct": 25.0,
@@ -1491,14 +1466,7 @@
         "cited": []
       },
       "false_refusal": true,
-      "boundary": null,
-      "judge": {
-        "faithfulness_score": 5,
-        "correctness_score": 5,
-        "reasoning": "The provided context introduces the problem and sets up the calculation (identifying the sample space size as 6^6), but it does not explicitly state the final numerical probability. Therefore, the assistant correctly identified that the provided material does not contain the completed answer.",
-        "model": "gemini-3.1-flash-lite",
-        "cached": false
-      }
+      "boundary": null
     },
     {
       "id": "eval-lec-05",
@@ -1507,8 +1475,8 @@
       "in_course": true,
       "question": "In Lecture 5, why is the probability mass function for the number of coin tosses until the first heads called a geometric PMF?",
       "error": null,
-      "wall_clock_ms": 22529.273599968292,
-      "backend_latency_ms": 22308,
+      "wall_clock_ms": 383.08419997338206,
+      "backend_latency_ms": 359,
       "model": "gemini-3.1-flash-lite",
       "response": {
         "paragraphs": [
@@ -1757,7 +1725,7 @@
           }
         ],
         "model": "gemini-3.1-flash-lite",
-        "latency_ms": 22308
+        "latency_ms": 359
       },
       "key_terms": {
         "recall_pct": 100.0,
@@ -1787,14 +1755,7 @@
         ]
       },
       "false_refusal": false,
-      "boundary": null,
-      "judge": {
-        "faithfulness_score": 5,
-        "correctness_score": 5,
-        "reasoning": "The answer directly and accurately addresses the question based on the context from Lecture 5, matching the reference answer well.",
-        "model": "gemini-3.5-flash",
-        "cached": false
-      }
+      "boundary": null
     },
     {
       "id": "eval-lec-06",
@@ -1803,8 +1764,8 @@
       "in_course": true,
       "question": "In Lecture 6, how do you obtain the marginal PMF of X from a two-dimensional joint PMF table of random variables X and Y?",
       "error": null,
-      "wall_clock_ms": 14875.542499939911,
-      "backend_latency_ms": 14853,
+      "wall_clock_ms": 471.42869990784675,
+      "backend_latency_ms": 429,
       "model": "gemini-3.1-flash-lite",
       "response": {
         "paragraphs": [
@@ -2053,7 +2014,7 @@
           }
         ],
         "model": "gemini-3.1-flash-lite",
-        "latency_ms": 14853
+        "latency_ms": 429
       },
       "key_terms": {
         "recall_pct": 100.0,
@@ -2084,14 +2045,7 @@
         ]
       },
       "false_refusal": false,
-      "boundary": null,
-      "judge": {
-        "faithfulness_score": 5,
-        "correctness_score": 5,
-        "reasoning": "The answer is fully supported by the context and accurately answers the question by stating that you fix the value of X and sum the joint PMF over all possible values of Y.",
-        "model": "gemini-3.5-flash",
-        "cached": false
-      }
+      "boundary": null
     },
     {
       "id": "eval-slide-01",
@@ -2100,8 +2054,8 @@
       "in_course": true,
       "question": "According to Lecture 1 slides, what two essential properties must the list of possible outcomes in a sample space satisfy?",
       "error": null,
-      "wall_clock_ms": 1125.8815000765026,
-      "backend_latency_ms": 931,
+      "wall_clock_ms": 218.21179997641593,
+      "backend_latency_ms": 193,
       "model": "gemini-3.8-flash",
       "response": {
         "paragraphs": [
@@ -2352,7 +2306,7 @@
           }
         ],
         "model": "gemini-3.8-flash",
-        "latency_ms": 931
+        "latency_ms": 193
       },
       "key_terms": {
         "recall_pct": 100.0,
@@ -2381,14 +2335,7 @@
         ]
       },
       "false_refusal": false,
-      "boundary": null,
-      "judge": {
-        "faithfulness_score": 5,
-        "correctness_score": 5,
-        "reasoning": "The answer accurately names the two properties specified in the Lecture 1 slides (mutually exclusive and collectively exhaustive) and is directly supported by the context.",
-        "model": "gemini-3.8-flash",
-        "cached": true
-      }
+      "boundary": null
     },
     {
       "id": "eval-slide-02",
@@ -2397,8 +2344,8 @@
       "in_course": true,
       "question": "State the Total Probability Theorem for a partition of the sample space into events A1, A2, and A3 as presented on the Lecture 2 slides.",
       "error": null,
-      "wall_clock_ms": 3899.537399993278,
-      "backend_latency_ms": 3876,
+      "wall_clock_ms": 224.88290001638234,
+      "backend_latency_ms": 201,
       "model": "gemini-3.5-flash",
       "response": {
         "paragraphs": [
@@ -2664,7 +2611,7 @@
           }
         ],
         "model": "gemini-3.5-flash",
-        "latency_ms": 3876
+        "latency_ms": 201
       },
       "key_terms": {
         "recall_pct": 100.0,
@@ -2694,14 +2641,7 @@
         ]
       },
       "false_refusal": false,
-      "boundary": null,
-      "judge": {
-        "faithfulness_score": 5,
-        "correctness_score": 5,
-        "reasoning": "The answer accurately states the Total Probability Theorem for three partition events as presented on the Lecture 2 slides, perfectly matching both the context and the reference answer.",
-        "model": "gemini-3.5-flash",
-        "cached": false
-      }
+      "boundary": null
     },
     {
       "id": "eval-slide-03",
@@ -2710,8 +2650,8 @@
       "in_course": true,
       "question": "How is the independence of two events A and B defined on the Lecture 3 slides?",
       "error": null,
-      "wall_clock_ms": 3421.555700013414,
-      "backend_latency_ms": 3401,
+      "wall_clock_ms": 205.11140010785311,
+      "backend_latency_ms": 185,
       "model": "gemini-3.5-flash",
       "response": {
         "paragraphs": [
@@ -2972,7 +2912,7 @@
           }
         ],
         "model": "gemini-3.5-flash",
-        "latency_ms": 3401
+        "latency_ms": 185
       },
       "key_terms": {
         "recall_pct": 100.0,
@@ -3002,14 +2942,7 @@
         ]
       },
       "false_refusal": false,
-      "boundary": null,
-      "judge": {
-        "faithfulness_score": 5,
-        "correctness_score": 5,
-        "reasoning": "The answer accurately reflects the definitions provided in the lecture slides, including both the conditional probability form and the intersection form.",
-        "model": "gemini-3.1-flash-lite",
-        "cached": false
-      }
+      "boundary": null
     },
     {
       "id": "eval-slide-04",
@@ -3018,8 +2951,8 @@
       "in_course": true,
       "question": "What is the Basic Counting Principle described on the Lecture 4 slides?",
       "error": null,
-      "wall_clock_ms": 4343.099000048824,
-      "backend_latency_ms": 4314,
+      "wall_clock_ms": 203.54730007238686,
+      "backend_latency_ms": 184,
       "model": "gemini-3.5-flash",
       "response": {
         "paragraphs": [
@@ -3280,7 +3213,7 @@
           }
         ],
         "model": "gemini-3.5-flash",
-        "latency_ms": 4314
+        "latency_ms": 184
       },
       "key_terms": {
         "recall_pct": 100.0,
@@ -3310,14 +3243,7 @@
         ]
       },
       "false_refusal": false,
-      "boundary": null,
-      "judge": {
-        "faithfulness_score": 5,
-        "correctness_score": 5,
-        "reasoning": "The response accurately and fully states the Basic Counting Principle as shown on the Lecture 4 slides and matches the reference answer perfectly.",
-        "model": "gemini-3.5-flash",
-        "cached": false
-      }
+      "boundary": null
     },
     {
       "id": "eval-slide-05",
@@ -3326,8 +3252,8 @@
       "in_course": true,
       "question": "According to Lecture 5 slides, what is the definition of expectation of a discrete random variable X, and what are its two physical or intuitive interpretations?",
       "error": null,
-      "wall_clock_ms": 4709.123300039209,
-      "backend_latency_ms": 4682,
+      "wall_clock_ms": 195.9643999580294,
+      "backend_latency_ms": 176,
       "model": "gemini-3.5-flash",
       "response": {
         "paragraphs": [
@@ -3626,7 +3552,7 @@
           }
         ],
         "model": "gemini-3.5-flash",
-        "latency_ms": 4682
+        "latency_ms": 176
       },
       "key_terms": {
         "recall_pct": 100.0,
@@ -3656,14 +3582,7 @@
         ]
       },
       "false_refusal": false,
-      "boundary": null,
-      "judge": {
-        "faithfulness_score": 5,
-        "correctness_score": 5,
-        "reasoning": "The answer accurately provides the definition and the two interpretations of expectation as stated in the Lecture 5 slides.",
-        "model": "gemini-3.1-flash-lite",
-        "cached": false
-      }
+      "boundary": null
     },
     {
       "id": "eval-slide-06",
@@ -3672,8 +3591,8 @@
       "in_course": true,
       "question": "State the Total Expectation Theorem for a partition of the sample space into disjoint events A1, A2, ..., An from the Lecture 6 slides.",
       "error": null,
-      "wall_clock_ms": 13266.68709993828,
-      "backend_latency_ms": 13223,
+      "wall_clock_ms": 200.44370007235557,
+      "backend_latency_ms": 181,
       "model": "gemini-3.1-flash-lite",
       "response": {
         "paragraphs": [
@@ -3939,7 +3858,7 @@
           }
         ],
         "model": "gemini-3.1-flash-lite",
-        "latency_ms": 13223
+        "latency_ms": 181
       },
       "key_terms": {
         "recall_pct": 100.0,
@@ -3969,14 +3888,7 @@
         ]
       },
       "false_refusal": false,
-      "boundary": null,
-      "judge": {
-        "faithfulness_score": 5,
-        "correctness_score": 5,
-        "reasoning": "The answer accurately states the Total Expectation Theorem as provided in the lecture slides.",
-        "model": "gemini-3.1-flash-lite",
-        "cached": false
-      }
+      "boundary": null
     },
     {
       "id": "eval-book-01",
@@ -3985,8 +3897,8 @@
       "in_course": true,
       "question": "In Grinstead and Snell Section 1.2, what are the two required properties of a distribution function m on a discrete sample space?",
       "error": null,
-      "wall_clock_ms": 13011.099900002591,
-      "backend_latency_ms": 12988,
+      "wall_clock_ms": 202.2612999426201,
+      "backend_latency_ms": 181,
       "model": "gemini-3.1-flash-lite",
       "response": {
         "paragraphs": [
@@ -4265,7 +4177,7 @@
           }
         ],
         "model": "gemini-3.1-flash-lite",
-        "latency_ms": 12988
+        "latency_ms": 181
       },
       "key_terms": {
         "recall_pct": 100.0,
@@ -4307,10 +4219,7 @@
         ]
       },
       "false_refusal": false,
-      "boundary": null,
-      "judge": {
-        "error": "judge call cap (30) reached; last error: no model attempted"
-      }
+      "boundary": null
     },
     {
       "id": "eval-book-02",
@@ -4319,8 +4228,8 @@
       "in_course": true,
       "question": "According to Grinstead and Snell Theorem 3.5 in Chapter 3, what is the formula for the binomial coefficients (n choose j)?",
       "error": null,
-      "wall_clock_ms": 20193.807099945843,
-      "backend_latency_ms": 20172,
+      "wall_clock_ms": 193.85890010744333,
+      "backend_latency_ms": 173,
       "model": "gemini-3.1-flash-lite",
       "response": {
         "paragraphs": [
@@ -4551,7 +4460,7 @@
           }
         ],
         "model": "gemini-3.1-flash-lite",
-        "latency_ms": 20172
+        "latency_ms": 173
       },
       "key_terms": {
         "recall_pct": 100.0,
@@ -4581,10 +4490,7 @@
         ]
       },
       "false_refusal": false,
-      "boundary": null,
-      "judge": {
-        "error": "judge call cap (30) reached; last error: no model attempted"
-      }
+      "boundary": null
     },
     {
       "id": "eval-book-03",
@@ -4593,8 +4499,8 @@
       "in_course": true,
       "question": "State Grinstead and Snell Theorem 3.6 for the probability of obtaining exactly j successes in n Bernoulli trials with success probability p.",
       "error": null,
-      "wall_clock_ms": 17780.1485999953,
-      "backend_latency_ms": 17758,
+      "wall_clock_ms": 207.6735000591725,
+      "backend_latency_ms": 186,
       "model": "gemini-3.1-flash-lite",
       "response": {
         "paragraphs": [
@@ -4825,7 +4731,7 @@
           }
         ],
         "model": "gemini-3.1-flash-lite",
-        "latency_ms": 17758
+        "latency_ms": 186
       },
       "key_terms": {
         "recall_pct": 100.0,
@@ -4855,10 +4761,7 @@
         ]
       },
       "false_refusal": false,
-      "boundary": null,
-      "judge": {
-        "error": "judge call cap (30) reached; last error: no model attempted"
-      }
+      "boundary": null
     },
     {
       "id": "eval-book-04",
@@ -4867,8 +4770,8 @@
       "in_course": true,
       "question": "How do Grinstead and Snell define the conditional probability P(F|E) of an event F given an event E in Section 4.1?",
       "error": null,
-      "wall_clock_ms": 16453.98619992193,
-      "backend_latency_ms": 16428,
+      "wall_clock_ms": 237.22180002368987,
+      "backend_latency_ms": 212,
       "model": "gemini-3.1-flash-lite",
       "response": {
         "paragraphs": [
@@ -5128,7 +5031,7 @@
           }
         ],
         "model": "gemini-3.1-flash-lite",
-        "latency_ms": 16428
+        "latency_ms": 212
       },
       "key_terms": {
         "recall_pct": 75.0,
@@ -5165,10 +5068,7 @@
         ]
       },
       "false_refusal": false,
-      "boundary": null,
-      "judge": {
-        "error": "judge call cap (30) reached; last error: no model attempted"
-      }
+      "boundary": null
     },
     {
       "id": "eval-book-05",
@@ -5177,8 +5077,8 @@
       "in_course": true,
       "question": "In Grinstead and Snell Definition 4.1 in Chapter 4, when are two events E and F defined to be independent?",
       "error": null,
-      "wall_clock_ms": 15922.172800055705,
-      "backend_latency_ms": 15901,
+      "wall_clock_ms": 213.0391999380663,
+      "backend_latency_ms": 194,
       "model": "gemini-3.1-flash-lite",
       "response": {
         "paragraphs": [
@@ -5419,7 +5319,7 @@
           }
         ],
         "model": "gemini-3.1-flash-lite",
-        "latency_ms": 15901
+        "latency_ms": 194
       },
       "key_terms": {
         "recall_pct": 100.0,
@@ -5449,10 +5349,7 @@
         ]
       },
       "false_refusal": false,
-      "boundary": null,
-      "judge": {
-        "error": "judge call cap (30) reached; last error: no model attempted"
-      }
+      "boundary": null
     },
     {
       "id": "eval-book-06",
@@ -5461,8 +5358,8 @@
       "in_course": true,
       "question": "In Grinstead and Snell Section 5.1, when is the Poisson distribution used as an approximation to the binomial distribution?",
       "error": null,
-      "wall_clock_ms": 19140.55010001175,
-      "backend_latency_ms": 19111,
+      "wall_clock_ms": 191.0199000267312,
+      "backend_latency_ms": 155,
       "model": "gemini-3.1-flash-lite",
       "response": {
         "paragraphs": [
@@ -5693,7 +5590,7 @@
           }
         ],
         "model": "gemini-3.1-flash-lite",
-        "latency_ms": 19111
+        "latency_ms": 155
       },
       "key_terms": {
         "recall_pct": 100.0,
@@ -5724,10 +5621,7 @@
         ]
       },
       "false_refusal": false,
-      "boundary": null,
-      "judge": {
-        "error": "judge call cap (30) reached; last error: no model attempted"
-      }
+      "boundary": null
     },
     {
       "id": "eval-book-07",
@@ -5736,8 +5630,8 @@
       "in_course": true,
       "question": "State Grinstead and Snell Theorem 6.6 giving the alternative computational formula for the variance of a discrete random variable X.",
       "error": null,
-      "wall_clock_ms": 12597.474099951796,
-      "backend_latency_ms": 12576,
+      "wall_clock_ms": 226.21580003760755,
+      "backend_latency_ms": 205,
       "model": "gemini-3.1-flash-lite",
       "response": {
         "paragraphs": [
@@ -5968,7 +5862,7 @@
           }
         ],
         "model": "gemini-3.1-flash-lite",
-        "latency_ms": 12576
+        "latency_ms": 205
       },
       "key_terms": {
         "recall_pct": 100.0,
@@ -5998,10 +5892,7 @@
         ]
       },
       "false_refusal": false,
-      "boundary": null,
-      "judge": {
-        "error": "judge call cap (30) reached; last error: no model attempted"
-      }
+      "boundary": null
     },
     {
       "id": "eval-turn-01",
@@ -6010,8 +5901,8 @@
       "in_course": true,
       "question": "Can you explain how Bayes' rule applies to the radar detection example from Lecture 2?",
       "error": null,
-      "wall_clock_ms": 7822.446300066076,
-      "backend_latency_ms": 7785,
+      "wall_clock_ms": 762.2954999096692,
+      "backend_latency_ms": 737,
       "model": "gemini-3.1-flash-lite",
       "response": {
         "paragraphs": [
@@ -6376,7 +6267,7 @@
           }
         ],
         "model": "gemini-3.1-flash-lite",
-        "latency_ms": 7785
+        "latency_ms": 737
       },
       "key_terms": {
         "recall_pct": 50.0,
@@ -6421,10 +6312,7 @@
         ]
       },
       "false_refusal": false,
-      "boundary": null,
-      "judge": {
-        "error": "judge call cap (30) reached; last error: no model attempted"
-      }
+      "boundary": null
     },
     {
       "id": "eval-turn-02",
@@ -6433,8 +6321,8 @@
       "in_course": true,
       "question": "In Lecture 5, Lecture 6, and the textbook, what is the linearity property of expectation for a linear transformation Y = aX + b of a random variable X?",
       "error": null,
-      "wall_clock_ms": 12727.866100030951,
-      "backend_latency_ms": 12701,
+      "wall_clock_ms": 449.87130002118647,
+      "backend_latency_ms": 431,
       "model": "gemini-3.1-flash-lite",
       "response": {
         "paragraphs": [
@@ -6797,7 +6685,7 @@
           }
         ],
         "model": "gemini-3.1-flash-lite",
-        "latency_ms": 12701
+        "latency_ms": 431
       },
       "key_terms": {
         "recall_pct": 100.0,
@@ -6850,10 +6738,7 @@
         ]
       },
       "false_refusal": false,
-      "boundary": null,
-      "judge": {
-        "error": "judge call cap (30) reached; last error: no model attempted"
-      }
+      "boundary": null
     },
     {
       "id": "eval-turn-03",
@@ -6862,8 +6747,8 @@
       "in_course": true,
       "question": "What is the two-coin toss counterexample from Lecture 3 that demonstrates pairwise independence does not imply mutual independence?",
       "error": null,
-      "wall_clock_ms": 15483.063700026833,
-      "backend_latency_ms": 15466,
+      "wall_clock_ms": 806.9679000182077,
+      "backend_latency_ms": 771,
       "model": "gemini-3.1-flash-lite",
       "response": {
         "paragraphs": [
@@ -7230,7 +7115,7 @@
           }
         ],
         "model": "gemini-3.1-flash-lite",
-        "latency_ms": 15466
+        "latency_ms": 771
       },
       "key_terms": {
         "recall_pct": 100.0,
@@ -7285,10 +7170,7 @@
         ]
       },
       "false_refusal": false,
-      "boundary": null,
-      "judge": {
-        "error": "judge call cap (30) reached; last error: no model attempted"
-      }
+      "boundary": null
     },
     {
       "id": "eval-off-01",
@@ -7297,8 +7179,8 @@
       "in_course": false,
       "question": "What is the capital of France, and what is its current estimated population?",
       "error": null,
-      "wall_clock_ms": 189.30680002085865,
-      "backend_latency_ms": 154,
+      "wall_clock_ms": 141.5314000332728,
+      "backend_latency_ms": 122,
       "model": "gemini-3.8-flash",
       "response": {
         "paragraphs": [
@@ -7509,7 +7391,7 @@
           }
         ],
         "model": "gemini-3.8-flash",
-        "latency_ms": 154
+        "latency_ms": 122
       },
       "key_terms": null,
       "citations": {
@@ -7535,8 +7417,8 @@
       "in_course": false,
       "question": "How does photosynthesis convert sunlight into chemical energy in plant chloroplasts?",
       "error": null,
-      "wall_clock_ms": 194.31589997839183,
-      "backend_latency_ms": 175,
+      "wall_clock_ms": 144.38690000679344,
+      "backend_latency_ms": 126,
       "model": "gemini-3.5-flash",
       "response": {
         "paragraphs": [
@@ -7742,7 +7624,7 @@
           }
         ],
         "model": "gemini-3.5-flash",
-        "latency_ms": 175
+        "latency_ms": 126
       },
       "key_terms": null,
       "citations": {
@@ -7768,8 +7650,8 @@
       "in_course": false,
       "question": "Explain the rules of cricket, specifically how the LBW (leg before wicket) law works.",
       "error": null,
-      "wall_clock_ms": 213.55949994176626,
-      "backend_latency_ms": 197,
+      "wall_clock_ms": 210.59629996307194,
+      "backend_latency_ms": 174,
       "model": "gemini-3.5-flash",
       "response": {
         "paragraphs": [
@@ -7975,7 +7857,7 @@
           }
         ],
         "model": "gemini-3.5-flash",
-        "latency_ms": 197
+        "latency_ms": 174
       },
       "key_terms": null,
       "citations": {

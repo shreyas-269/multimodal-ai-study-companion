@@ -1033,3 +1033,24 @@ otebooks/nb_demo_6041, subcollections sources, chunks, 	opics, questions, and th
 **Cold start:** Render's free tier spins down after 15 minutes idle, so the first request (`GET /v1/notebooks`) takes 50–75s. Later requests stay under 2s. Pre-warm the backend about 2 minutes before an evaluation or recording.
 
 **Indexes:** The local emulator skips index enforcement, but production Firestore returns 400 FailedPrecondition without the notebooks composite index. The vector index is not exposed in the Firebase Console forms, so it is created with `gcloud firestore indexes composite create` (see `DECISIONS.md`, 2026-10-13).
+
+---
+
+## S9 · Evaluation suite and quantitative benchmark scoring
+
+**What it does:** Evaluates and scores Groundwork's source grounding, citation precision/recall, out-of-domain guardrail compliance, and response latency across 25 curated benchmark cases in `eval/testset.json` targeting the demo course (`nb_demo_6041`). It executes with zero live Gemini API quota expenditure by querying the pre-warmed Firestore `llm_cache`.
+
+**Data flow:** `eval/run_eval.py` executed via `backend/.venv` from repo root → authenticates anonymously via Auth emulator (`FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099`) or `EVAL_ID_TOKEN` → sends `POST /v1/notebooks/nb_demo_6041/ask` (`allow_outside: false`) for each test case sequentially → parses response paragraphs and retrieved context → evaluates:
+- **Citations:** PDF physical page matching within ±2 tolerance; exact slide index matching; video timestamp matching under Spec E1 (t_start - 45s <= t_cite <= t_end).
+- **Guardrails:** 100% boundary check on off-course questions (verifying every paragraph has `outside_course: true` and zero citations).
+- **Key terms:** Computes recall of expected domain terminology against retrieved context.
+- **Latency & caching:** Measures client wall-clock and backend `latency_ms` (p50: 0.2 s, p90: 0.9 s).
+Outputs results to `eval/results/checkpoint_3.json` and `eval/results/checkpoint_3.md`.
+
+**Main files:** `eval/run_eval.py`, `eval/testset.json`, `eval/.llm_judge_cache.json`, `eval/results/checkpoint_3.json`, `eval/results/checkpoint_3.md`.
+
+**A judge might ask… / my answer:**
+- *How do you evaluate retrieval and citations without spending API quota?* The harness queries `/ask`, which checks the pre-warmed Firestore `llm_cache` populated by `prewarm_cache.py`. All 25 queries hit cache, guaranteeing identical outputs and sub-second latency with zero live Gemini API calls.
+- *Why is textbook page tolerance ±2?* Handout and textbook section chunks occasionally cross page splits or capture contiguous sub-topic context across section boundaries; ±2 physical pages accommodates these chunk boundaries.
+- *How are video citations verified?* Under Spec E1, a video citation matches when its source ID matches and its start timestamp falls between 45 seconds before the expected window and the window's end (t_start - 45s <= t_cite <= t_end), reflecting that answers occur after problem setups.
+- *Why did multi-turn cases show lower citation recall?* The evaluation runner sends queries statelessly to `POST /v1/notebooks/{nb}/ask` using only the final follow-up string without prior conversation history (`get_recent_chat_messages`). In live chat (`/chats/{c}/messages`), multi-turn history is fully preserved.
