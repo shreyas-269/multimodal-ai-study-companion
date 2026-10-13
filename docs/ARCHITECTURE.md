@@ -1,6 +1,6 @@
 # Architecture
 
-**Status: v1.5 (12 Oct 2026, after F7/S11-B2 hosted Vercel deployment and live auth switching).** Checkpoint 1 passed on 6 Oct; S4's protected scope (page, slide and timestamp citations, topics, the demo notebook with video) passed on 9 Oct. The data model, API contract, libraries and repo layout change only through a new line in DECISIONS.md. S5 (chats that remember, custom instructions, the topic boost) passed on 11 Oct. S7 (the Study Coach's Firestore storage and its three endpoints) passed on 11 Oct.
+**Status: v1.5 (13 Oct 2026, after S11 Hosted Demo deployment and live verification).** Checkpoint 1 passed on 6 Oct; S4's protected scope (page, slide and timestamp citations, topics, the demo notebook with video) passed on 9 Oct. The data model, API contract, libraries and repo layout change only through a new line in DECISIONS.md. S5 (chats that remember, custom instructions, the topic boost) passed on 11 Oct. S7 (the Study Coach's Firestore storage and its three endpoints) passed on 11 Oct.
 
 ## How these docs are organised
 
@@ -113,6 +113,8 @@ There is no job queue in v1 (cut on 6 Oct). Uploads are processed inside the req
 8. The free tier's per-model daily quota is the real budget: every call goes through the model chain, and bulk scripts may put the lighter models first with `models=`.
 
 ## Acceptance criteria
+
+**S11 hosted deployment (passed 13 Oct):** the Vercel frontend and Render backend, running against live Firestore (study-companion-d049d), passed verification on 13 Oct.
 
 Written by Shreyas before each feature is built (3–5 observable checks each). A feature is done only when every check passes.
 

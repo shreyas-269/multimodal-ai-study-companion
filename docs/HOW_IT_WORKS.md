@@ -1018,3 +1018,18 @@ otebooks/nb_demo_6041, subcollections sources, chunks, 	opics, questions, and th
 - *Why is S3 an internal stub instead of using boto3?* Preserves the frozen dependency stack while preparing the codebase architecture for alternative hosting destinations. Introducing `boto3` or `botocore` would add dozens of megabytes of third-party dependencies during a strict freeze. The stub implements the complete Protocol, raises descriptive `NotImplementedError` exceptions, and proves multi-provider extensibility in automated tests.
 - *Why does delete_prefix reject an empty string?* Both local and GCS backends enforce `ValueError("Cannot delete with empty prefix")` to prevent accidental whole-bucket or whole-root deletion. Passing an empty prefix in Cloud Storage or an unrestricted recursive unlink on the local filesystem would wipe all stored data.
 
+
+
+## S11 · Hosted Production Deployment & Live Verification
+
+**What it does:** Runs the full-stack system live across Vercel (Next.js frontend) and Render (FastAPI Docker container) against Firebase project `study-companion-d049d` (Spark plan), with zero cloud infrastructure cost.
+
+**Data flow:**
+- The user opens the live Vercel domain and signs in through the live Firebase Identity Toolkit.
+- The frontend calls the Render backend (`NEXT_PUBLIC_API_BASE_URL`, a Config variable) with the Bearer token.
+- The backend queries Firestore: notebooks through a composite index (`owner_uid` ascending, `created_at` descending), chunks through a vector index (`embedding`, 384 dimensions, flat cosine).
+- The response returns grounded citations, range-streamed PDFs, and verified quizzes.
+
+**Cold start:** Render's free tier spins down after 15 minutes idle, so the first request (`GET /v1/notebooks`) takes 50–75s. Later requests stay under 2s. Pre-warm the backend about 2 minutes before an evaluation or recording.
+
+**Indexes:** The local emulator skips index enforcement, but production Firestore returns 400 FailedPrecondition without the notebooks composite index. The vector index is not exposed in the Firebase Console forms, so it is created with `gcloud firestore indexes composite create` (see `DECISIONS.md`, 2026-10-13).
